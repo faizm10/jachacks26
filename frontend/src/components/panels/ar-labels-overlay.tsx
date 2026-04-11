@@ -1,5 +1,9 @@
 "use client";
 
+import type {
+  DetectedObject,
+  ObjectDetection as CocoObjectDetector,
+} from "@tensorflow-models/coco-ssd";
 import type { DetectedPerson, FrameAnalysis } from "@/lib/types/room";
 import { GlassPanel } from "@/components/ui/glass-panel";
 import { SectionHeader } from "@/components/panels/section-header";
@@ -93,7 +97,7 @@ function updateTracks(tracks: TrackedPerson[], raw: RawDet[]): TrackedPerson[] {
 
 /* ── Model loader ── */
 
-let cocoModelPromise: Promise<any> | null = null;
+let cocoModelPromise: Promise<CocoObjectDetector> | null = null;
 async function loadCocoModel() {
   if (!cocoModelPromise) {
     cocoModelPromise = (async () => {
@@ -272,7 +276,7 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const tracksRef = useRef<TrackedPerson[]>([]);
-  const modelRef = useRef<any>(null);
+  const modelRef = useRef<CocoObjectDetector | null>(null);
   const rafRef = useRef<number | null>(null);
   const expandedVideoRef = useRef<HTMLVideoElement | null>(null);
   const expandedCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -320,8 +324,8 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
       try {
         const preds = await model.detect(video);
         const raw: RawDet[] = preds
-          .filter((p: any) => p.class === "person" && p.score > 0.3)
-          .map((p: any) => ({
+          .filter((p: DetectedObject) => p.class === "person" && p.score > 0.3)
+          .map((p: DetectedObject) => ({
             bbox: {
               x: p.bbox[0] / video.videoWidth,
               y: p.bbox[1] / video.videoHeight,
@@ -683,7 +687,7 @@ function ExpandedARModal({
     return () => {
       if (expandedRafRef.current) cancelAnimationFrame(expandedRafRef.current);
     };
-  }, [tracksRef, expandedVideoRef, expandedCanvasRef, expandedRafRef]);
+  }, [tracksRef, expandedVideoRef, expandedCanvasRef, expandedRafRef, geminiStatus]);
 
   return (
     <motion.div
