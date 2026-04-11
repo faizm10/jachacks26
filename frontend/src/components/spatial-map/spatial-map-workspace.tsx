@@ -83,10 +83,10 @@ export function SpatialMapWorkspace({ fallback }: { fallback: FloorPlanData }) {
           initial="hidden"
           animate="show"
           transition={{ delay: 0.06 }}
-          className="lg:col-span-4"
+          className="lg:col-span-6"
           id="camera-feed"
         >
-          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">
+          <p className="mb-4 text-xs font-medium uppercase tracking-[0.18em] text-white/45">
             Motion clips
           </p>
           <CameraFeedPanel />
@@ -96,7 +96,7 @@ export function SpatialMapWorkspace({ fallback }: { fallback: FloorPlanData }) {
           initial="hidden"
           animate="show"
           transition={{ delay: 0.1 }}
-          className="min-h-[320px] lg:col-span-8"
+          className="min-h-[320px] lg:col-span-6"
         >
           <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">
             Floor plan + heat

@@ -129,14 +129,14 @@ function VideoTile({
 
   return (
     <div
-      className={`group relative w-full overflow-hidden rounded-xl border bg-black/40 transition-all cursor-pointer ${
+      className={`group relative w-full overflow-hidden rounded-2xl border bg-black/40 transition-all cursor-pointer ${
         isActive
           ? "border-sky-400/50 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_8px_32px_rgba(0,0,0,0.4)]"
           : "border-white/[0.06] hover:border-white/[0.18] hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
       }`}
       onClick={() => onSelect(obj)}
     >
-      <div className="aspect-video w-full bg-black">
+      <div className="aspect-video min-h-[11.5rem] w-full bg-black sm:min-h-[13rem] lg:min-h-[14.5rem]">
         {!errored ? (
           obj.kind === "video" ? (
             <video
@@ -186,10 +186,10 @@ function VideoTile({
       </button>
 
       {/* Filename + tap-to-analyze hint */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-3 py-2.5">
-        <p className="truncate text-[11px] font-medium text-white/75">{fileName}</p>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-3 py-3 sm:px-4 sm:py-3.5">
+        <p className="truncate text-xs font-medium text-white/80 sm:text-[13px]">{fileName}</p>
         {!isActive && (
-          <p className="text-[9px] text-white/35 opacity-0 transition-opacity group-hover:opacity-100">
+          <p className="mt-0.5 text-[10px] text-white/40 opacity-0 transition-opacity group-hover:opacity-100 sm:text-[11px]">
             Click to analyze on floor plan
           </p>
         )}
@@ -211,7 +211,7 @@ export function CameraFeedPanel() {
       : `Storage bucket ${bucketName}`;
 
   return (
-    <GlassPanel className="relative overflow-hidden p-5">
+    <GlassPanel className="relative overflow-hidden p-6 sm:p-7">
       <SectionHeader
         title="Camera feed"
         subtitle={subtitle}
@@ -219,7 +219,7 @@ export function CameraFeedPanel() {
       />
 
       {status === "loading" ? (
-        <div className="mt-3 flex min-h-[180px] items-center justify-center rounded-xl border border-white/[0.06] bg-black/40">
+        <div className="mt-4 flex min-h-[220px] items-center justify-center rounded-2xl border border-white/[0.06] bg-black/40">
           <motion.div
             className="h-8 w-8 rounded-full border-2 border-white/15 border-t-white/70"
             animate={{ rotate: 360 }}
@@ -228,7 +228,7 @@ export function CameraFeedPanel() {
           />
         </div>
       ) : status === "empty" ? (
-        <div className="mt-3 flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-xl border border-white/[0.06] bg-black/40 px-6 text-center">
+        <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-2xl border border-white/[0.06] bg-black/40 px-6 text-center">
           <p className="text-sm font-medium text-white/65">No media in {bucketName} yet</p>
           <p className="max-w-sm text-xs text-white/40">
             Upload .mp4 files to the <span className="text-white/55">{bucketName}</span> bucket.
@@ -242,7 +242,7 @@ export function CameraFeedPanel() {
           </button>
         </div>
       ) : status === "error" ? (
-        <div className="mt-3 flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-xl border border-white/[0.06] bg-black/40 px-6 text-center">
+        <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.06] bg-black/40 px-6 text-center">
           <p className="text-sm font-medium text-red-200/90">Could not load bucket</p>
           <p className="max-w-md text-xs text-white/45">{error}</p>
           <button
@@ -254,7 +254,7 @@ export function CameraFeedPanel() {
           </button>
         </div>
       ) : (
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
           {objects.map((obj) => (
             <VideoTile
               key={obj.path}
