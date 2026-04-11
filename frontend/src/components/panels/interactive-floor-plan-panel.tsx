@@ -180,10 +180,10 @@ export function InteractiveFloorPlanPanel({
               href={data.overlayDataUrl}
               width="100"
               height="100"
-              preserveAspectRatio="none"
-              opacity={data.meta?.pipeline === "hog_homography" ? 1 : 0.62}
+              preserveAspectRatio="xMidYMid meet"
+              opacity={data.meta?.pipeline === "yolo_homography" ? 1 : 0.62}
               style={{
-                mixBlendMode: data.meta?.pipeline === "hog_homography" ? "normal" : "screen",
+                mixBlendMode: data.meta?.pipeline === "yolo_homography" ? "normal" : "screen",
               }}
             />
           ) : null}

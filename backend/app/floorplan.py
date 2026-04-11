@@ -2,9 +2,9 @@
 Motion-derived spatial map from camera video.
 
 Two pipelines:
-  1. HOG person detection + homography (when a corridor calibration is provided).
-     Detects people per frame, maps foot positions through H onto the floor plan,
-     renders a Gaussian density heatmap masked to the corridor polygon.
+  1. YOLOv8 person detection + homography (when a corridor calibration is provided).
+     Detects people per frame via neural net, maps foot positions through H onto the
+     floor plan, renders a Gaussian density heatmap masked to the corridor polygon.
 
   2. Frame-differencing fallback (legacy, no calibration needed).
      Accumulates pixel-diff between consecutive frames, warps to floor ROI.
@@ -33,10 +33,13 @@ GRID_H = int(os.environ.get("FLOORPLAN_GRID_H", "24"))
 MAX_BYTES = int(os.environ.get("FLOORPLAN_MAX_BYTES", str(25 * 1024 * 1024)))
 MAX_SECONDS = float(os.environ.get("FLOORPLAN_MAX_SECONDS", "12"))
 FRAME_STRIDE = int(os.environ.get("FLOORPLAN_FRAME_STRIDE", "2"))
-# Sample every N frames for person detection (MOG2 is fast so can be lower)
-HOG_STRIDE = int(os.environ.get("FLOORPLAN_HOG_STRIDE", "4"))
+# Sample every N frames for YOLO detection
+HOG_STRIDE = int(os.environ.get("FLOORPLAN_HOG_STRIDE", "6"))
 PROCESS_W = int(os.environ.get("FLOORPLAN_PROCESS_W", "320"))
 PROCESS_H = int(os.environ.get("FLOORPLAN_PROCESS_H", "180"))
+# YOLOv8 config
+_YOLO_CONF = float(os.environ.get("FLOORPLAN_YOLO_CONF", "0.25"))
+_YOLO_IMGSZ = int(os.environ.get("FLOORPLAN_YOLO_IMGSZ", "640"))
 
 # Legacy ROIs (frame-diff fallback for IMG_5530)
 _DEFAULT_VIDEO_ROI = (8.0, 20.0, 84.0, 58.0)
@@ -78,67 +81,47 @@ class FloorPlanAnalyzeResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# MOG2 background subtraction pipeline (replaces HOG)
+# YOLOv8 person detection pipeline
 #
-# For a fixed security camera, the background (walls, furniture, floor) is
-# static. MOG2 learns this background over the first N frames, then any
-# moving pixel = person. This gives:
-#   • Accurate blob shapes (real silhouettes, not rectangle approximations)
-#   • No false positives from furniture / signs
-#   • Much faster than HOG sliding-window search
-#   • Better foot-position estimation (bottom of actual silhouette)
+# Uses a pre-trained YOLOv8-nano model (auto-downloaded ~6 MB on first run).
+# Detects class 0 (person) in each sampled frame with a bounding box.
+# Foot position = bottom-centre of bounding box.
+# No warmup needed — works on individual frames without background modeling.
 # ---------------------------------------------------------------------------
 
-# Minimum/maximum blob area as a fraction of the frame area
-_BLOB_AREA_MIN_FRAC = 0.0008   # ~0.08% — filters out tiny noise
-_BLOB_AREA_MAX_FRAC = 0.30     # ~30%  — filters out full-frame background errors
-_WARMUP_FRAMES = 25            # frames consumed to build background model before detection
+_yolo_model = None  # lazy singleton
 
 
-def _feet_from_frame(
-    frame_bgr: np.ndarray,
-    mog2: cv2.BackgroundSubtractorMOG2,
-    morph_kernel: np.ndarray,
-) -> list[tuple[float, float]]:
+def _get_yolo():
+    """Load YOLOv8-nano once and cache as module-level singleton."""
+    global _yolo_model
+    if _yolo_model is None:
+        from ultralytics import YOLO  # noqa: PLC0415
+        _yolo_model = YOLO("yolov8n.pt")
+    return _yolo_model
+
+
+def _feet_from_frame(frame_bgr: np.ndarray) -> list[tuple[float, float]]:
     """
-    Apply MOG2 to one frame. Returns foot positions (x, y) in original pixel coords.
-    Foot = bottom-centre of each detected foreground blob.
+    Run YOLOv8 on one frame. Returns foot positions (x, y) in original pixel coords.
+    Foot = bottom-centre of each detected person bounding box.
     """
-    h, w = frame_bgr.shape[:2]
-    frame_area = h * w
-    min_area = frame_area * _BLOB_AREA_MIN_FRAC
-    max_area = frame_area * _BLOB_AREA_MAX_FRAC
-
-    fg = mog2.apply(frame_bgr)
-
-    # Clean up: remove isolated noise, fill holes in silhouettes
-    fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN,  morph_kernel)
-    fg = cv2.morphologyEx(fg, cv2.MORPH_CLOSE, morph_kernel)
-    fg = cv2.dilate(fg, morph_kernel, iterations=2)
-
-    # Connected components → blobs
-    num_labels, _labels, stats, _centroids = cv2.connectedComponentsWithStats(fg, connectivity=8)
-
+    model = _get_yolo()
+    results = model(
+        frame_bgr,
+        classes=[0],          # person only
+        conf=_YOLO_CONF,
+        imgsz=_YOLO_IMGSZ,
+        verbose=False,
+    )
     feet: list[tuple[float, float]] = []
-    for lab in range(1, num_labels):
-        area = int(stats[lab, cv2.CC_STAT_AREA])
-        if not (min_area <= area <= max_area):
-            continue
-        bx  = int(stats[lab, cv2.CC_STAT_LEFT])
-        by  = int(stats[lab, cv2.CC_STAT_TOP])
-        bw  = int(stats[lab, cv2.CC_STAT_WIDTH])
-        bh  = int(stats[lab, cv2.CC_STAT_HEIGHT])
-
-        # Aspect-ratio filter: a standing person is taller than wide
-        aspect = bh / max(bw, 1)
-        if aspect < 0.6:       # too flat — likely a shadow or floor reflection
-            continue
-
-        # Foot = bottom-centre of the foreground silhouette
-        fx = bx + bw / 2.0
-        fy = by + bh * 0.97   # 97% down = actual floor contact (avoids background fringe)
-        feet.append((fx, fy))
-
+    boxes = results[0].boxes
+    if boxes is not None and len(boxes):
+        xyxy = boxes.xyxy.cpu().numpy()  # shape (N, 4): x1 y1 x2 y2
+        for x1, y1, x2, y2 in xyxy:
+            fx = (float(x1) + float(x2)) / 2.0
+            fy = float(y2)              # bottom-centre = foot on the floor
+            feet.append((fx, fy))
     return feet
 
 
@@ -205,23 +188,13 @@ def _person_heatmap(
     max_frames: int,
 ) -> tuple[np.ndarray, int]:
     """
-    Use MOG2 background subtraction to detect people in each sampled frame,
-    transform foot positions through homography H, accumulate onto a density
-    grid (floor_h × floor_w).  Returns (density float64, total_detections).
+    Run YOLOv8 on sampled frames, transform foot positions through homography H,
+    accumulate a density grid (floor_h × floor_w).
+    Returns (density float64, total_detections).
     """
     density = np.zeros((cal.floor_h, cal.floor_w), dtype=np.float64)
-
-    # MOG2: learns background over first _WARMUP_FRAMES, then subtracts it
-    mog2 = cv2.createBackgroundSubtractorMOG2(
-        history=200,
-        varThreshold=40,      # lower = more sensitive to subtle movement
-        detectShadows=False,  # shadows off — faster and avoids false feet
-    )
-    morph_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-
     total_det = 0
     read_idx = 0
-    frame_count = 0
 
     while read_idx < max_frames:
         cap.set(cv2.CAP_PROP_POS_FRAMES, read_idx)
@@ -229,11 +202,8 @@ def _person_heatmap(
         if not ok:
             break
 
-        frame_count += 1
-        feet = _feet_from_frame(frame, mog2, morph_kernel)
-
-        # Skip detection during warm-up — MOG2 is still learning the background
-        if frame_count > _WARMUP_FRAMES and feet:
+        feet = _feet_from_frame(frame)
+        if feet:
             total_det += len(feet)
             pts_cam = np.array([[fx, fy] for fx, fy in feet], dtype=np.float32).reshape(-1, 1, 2)
             pts_floor = cv2.perspectiveTransform(pts_cam, H).reshape(-1, 2)
@@ -244,8 +214,7 @@ def _person_heatmap(
 
         read_idx += HOG_STRIDE
 
-    # Gaussian blur — spread each detection point into a smooth footprint
-    # Radius scaled to floor plan size so it feels right at any resolution
+    # Gaussian blur — spread each foot-point into a smooth footprint
     sigma = max(cal.floor_h // 30, 15)
     if density.max() > 0:
         density = cv2.GaussianBlur(
@@ -372,7 +341,7 @@ def _analyze_with_calibration(
         source="video",
         overlayDataUrl=overlay,
         meta={
-            "pipeline": "hog_homography",
+            "pipeline": "yolo_homography",
             "camera_id": cal.camera_id,
             "corridorLabel": cal.label or cal.camera_id,
             "totalDetections": total_det,

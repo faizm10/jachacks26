@@ -7,6 +7,7 @@
  * Step 2: Click 4 corners of the corridor in the camera view.
  * Step 3: Click the 4 matching corners on the floor plan.
  * Step 4: Save — the backend stores the homography points.
+ * Open an existing row with **Edit** to change corners; use **Clear camera/floor corners** then click again.
  *
  * After calibration, the analyze endpoint will use HOG person detection +
  * homography to project detections accurately onto the floor plan corridor.
@@ -30,6 +31,17 @@ const POINT_COLORS = ["#f87171", "#fb923c", "#a3e635", "#38bdf8"] as const;
 const POINT_LABELS = ["A", "B", "C", "D"] as const;
 
 type XY = [number, number]; // percentage 0–100
+
+function stemFromPath(path: string): string {
+  return (path.split("/").pop()?.replace(/\.[^.]+$/, "") ?? path).trim().toLowerCase();
+}
+
+function findVideoForCameraId(objects: CamsLatestObject[], cameraId: string): CamsLatestObject | null {
+  const id = cameraId.trim().toLowerCase();
+  return (
+    objects.filter((o) => o.kind === "video").find((o) => stemFromPath(o.path) === id) ?? null
+  );
+}
 
 function PointMarker({ idx, x, y }: { idx: number; x: number; y: number }) {
   return (
@@ -131,9 +143,12 @@ function ClickablePanel({
 function CalibrationModal({
   onClose,
   onSaved,
+  initialCalibration,
 }: {
   onClose: () => void;
   onSaved: () => void;
+  /** When set, modal opens in edit mode with these points (camera clip matched by `camera_id`). */
+  initialCalibration: CorridorCalibration | null;
 }) {
   const { objects } = useCamsAllFeeds();
   const [selectedCam, setSelectedCam] = useState<CamsLatestObject | null>(null);
@@ -143,8 +158,10 @@ function CalibrationModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hydratedEditKey = useRef<string | null>(null);
 
   const videoObjects = objects.filter((o) => o.kind === "video");
+  const isEditMode = initialCalibration != null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -157,6 +174,24 @@ function CalibrationModal({
       document.body.style.overflow = "";
     };
   }, [onClose]);
+
+  /** Edit mode: load saved points once per calibration; keep matching clip in sync when bucket loads. */
+  useEffect(() => {
+    if (!initialCalibration) {
+      hydratedEditKey.current = null;
+      return;
+    }
+    const key = `edit:${initialCalibration.camera_id}`;
+    if (hydratedEditKey.current !== key) {
+      hydratedEditKey.current = key;
+      setCameraPts(
+        initialCalibration.camera_pts.map((p) => [p[0], p[1]] as XY),
+      );
+      setFloorPts(initialCalibration.floor_pts.map((p) => [p[0], p[1]] as XY));
+      setLabel(initialCalibration.label ?? "");
+    }
+    setSelectedCam(findVideoForCameraId(objects, initialCalibration.camera_id));
+  }, [initialCalibration, objects]);
 
   const step =
     !selectedCam ? 0 : cameraPts.length < 4 ? 1 : floorPts.length < 4 ? 2 : 3;
@@ -196,6 +231,15 @@ function CalibrationModal({
     setFloorPts([]);
   }, []);
 
+  const clearCameraCorners = useCallback(() => {
+    setCameraPts([]);
+    setFloorPts([]);
+  }, []);
+
+  const clearFloorCorners = useCallback(() => {
+    setFloorPts([]);
+  }, []);
+
   if (typeof document === "undefined") return null;
 
   return createPortal(
@@ -217,9 +261,14 @@ function CalibrationModal({
         {/* Header */}
         <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold text-white">Corridor calibration</h2>
+            <h2 className="text-sm font-semibold text-white">
+              {isEditMode ? "Edit corridor calibration" : "Corridor calibration"}
+            </h2>
             <p className="mt-0.5 text-xs text-white/45">
               Mark 4 matching corners in the camera view and on the floor plan to compute the homography.
+              {isEditMode
+                ? " Use Clear to re-place corners, then click again in order A→D."
+                : null}
             </p>
           </div>
           <button
@@ -237,31 +286,53 @@ function CalibrationModal({
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">
               Step 1 · Select camera
             </p>
-            <div className="flex flex-wrap gap-2">
-              {videoObjects.map((obj) => {
-                const name = obj.path.split("/").pop() ?? obj.path;
-                return (
-                  <button
-                    key={obj.path}
-                    type="button"
-                    onClick={() => {
-                      setSelectedCam(obj);
-                      reset();
-                    }}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      selectedCam?.path === obj.path
-                        ? "border-sky-400/40 bg-sky-400/15 text-sky-200"
-                        : "border-white/12 bg-white/[0.04] text-white/60 hover:border-white/20 hover:text-white/80"
-                    }`}
-                  >
-                    {name}
-                  </button>
-                );
-              })}
-              {videoObjects.length === 0 && (
-                <p className="text-xs text-white/35">No videos in cam bucket yet.</p>
-              )}
-            </div>
+            {isEditMode && initialCalibration ? (
+              <div className="space-y-2">
+                {selectedCam ? (
+                  <p className="text-xs text-white/55">
+                    Editing clip{" "}
+                    <span className="font-medium text-white/85">
+                      {selectedCam.path.split("/").pop() ?? selectedCam.path}
+                    </span>{" "}
+                    <span className="text-white/35">({initialCalibration.camera_id})</span>
+                  </p>
+                ) : (
+                  <p className="rounded-lg border border-amber-400/25 bg-amber-950/25 px-3 py-2 text-xs text-amber-100/85">
+                    No video in the bucket matches camera ID{" "}
+                    <code className="rounded bg-black/40 px-1 py-0.5">{initialCalibration.camera_id}</code>.
+                    Upload that file (same name) to preview the clip while you adjust points, or remove this
+                    calibration and create a new one.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {videoObjects.map((obj) => {
+                  const name = obj.path.split("/").pop() ?? obj.path;
+                  return (
+                    <button
+                      key={obj.path}
+                      type="button"
+                      onClick={() => {
+                        if (selectedCam?.path === obj.path) return;
+                        setSelectedCam(obj);
+                        reset();
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        selectedCam?.path === obj.path
+                          ? "border-sky-400/40 bg-sky-400/15 text-sky-200"
+                          : "border-white/12 bg-white/[0.04] text-white/60 hover:border-white/20 hover:text-white/80"
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+                {videoObjects.length === 0 && (
+                  <p className="text-xs text-white/35">No videos in cam bucket yet.</p>
+                )}
+              </div>
+            )}
           </div>
 
           {selectedCam && (
@@ -271,6 +342,23 @@ function CalibrationModal({
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">
                   Step 2 · Mark corridor corners (4 points each)
                 </p>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={clearCameraCorners}
+                    className="rounded-full border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[10px] font-medium text-white/55 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white/75"
+                  >
+                    Clear camera corners
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearFloorCorners}
+                    disabled={cameraPts.length < 4}
+                    className="rounded-full border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[10px] font-medium text-white/55 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white/75 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    Clear floor corners
+                  </button>
+                </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <ClickablePanel
                     src={selectedCam.url}
@@ -331,10 +419,15 @@ function CalibrationModal({
                 <button
                   type="button"
                   onClick={() => void handleSave()}
-                  disabled={step < 3 || saving}
+                  disabled={
+                    saving ||
+                    !selectedCam ||
+                    cameraPts.length < 4 ||
+                    floorPts.length < 4
+                  }
                   className="rounded-full border border-sky-400/30 bg-sky-500/20 px-5 py-2 text-xs font-semibold text-sky-200 transition-colors hover:bg-sky-500/30 disabled:opacity-40"
                 >
-                  {saving ? "Saving…" : "Save calibration"}
+                  {saving ? "Saving…" : isEditMode ? "Save changes" : "Save calibration"}
                 </button>
               </div>
 
@@ -379,6 +472,7 @@ function CalibrationModal({
 
 export function CorridorCalibrationPanel() {
   const [showModal, setShowModal] = useState(false);
+  const [editingCalibration, setEditingCalibration] = useState<CorridorCalibration | null>(null);
   const [calibrations, setCalibrations] = useState<CorridorCalibration[]>([]);
   const [loadingCals, setLoadingCals] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -421,7 +515,10 @@ export function CorridorCalibrationPanel() {
         action={
           <button
             type="button"
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              setEditingCalibration(null);
+              setShowModal(true);
+            }}
             className="rounded-full border border-sky-400/30 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold text-sky-200/90 transition-colors hover:bg-sky-400/20"
           >
             + New calibration
@@ -460,13 +557,25 @@ export function CorridorCalibrationPanel() {
                   {cal.floor_w}×{cal.floor_h} floor plan
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => void handleDelete(cal.camera_id)}
-                className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-white/40 hover:border-red-400/25 hover:text-red-300/70"
-              >
-                Remove
-              </button>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingCalibration(cal);
+                    setShowModal(true);
+                  }}
+                  className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-[10px] font-semibold text-sky-200/90 transition-colors hover:bg-sky-400/20"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDelete(cal.camera_id)}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-white/40 hover:border-red-400/25 hover:text-red-300/70"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -475,7 +584,12 @@ export function CorridorCalibrationPanel() {
       <AnimatePresence>
         {showModal && (
           <CalibrationModal
-            onClose={() => setShowModal(false)}
+            key={editingCalibration?.camera_id ?? "new"}
+            initialCalibration={editingCalibration}
+            onClose={() => {
+              setShowModal(false);
+              setEditingCalibration(null);
+            }}
             onSaved={() => void fetchCals()}
           />
         )}
