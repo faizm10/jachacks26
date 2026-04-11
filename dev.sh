@@ -26,6 +26,30 @@ echo "[dev] backend http://127.0.0.1:${BACKEND_PORT}  |  frontend http://127.0.0
 echo "[dev] Ctrl+C stops both."
 echo ""
 
+# --- Install dependencies (backend venv + frontend node_modules) ---
+echo "[dev] installing backend (pip)…"
+(
+  cd "$ROOT/backend"
+  if [[ ! -d .venv ]]; then
+    if ! command -v python3 >/dev/null 2>&1; then
+      echo "[dev] error: python3 not found; install Python 3 and retry." >&2
+      exit 1
+    fi
+    python3 -m venv .venv
+  fi
+  # shellcheck source=/dev/null
+  source .venv/bin/activate
+  python -m pip install -U pip >/dev/null
+  python -m pip install -r requirements.txt
+)
+echo "[dev] installing frontend (npm)…"
+(
+  cd "$ROOT/frontend"
+  npm install
+)
+echo "[dev] installs done."
+echo ""
+
 (
   cd "$ROOT/backend"
   if [[ -f .venv/bin/activate ]]; then
