@@ -4,7 +4,9 @@ import type {
   DetectedObject,
   ObjectDetection as CocoObjectDetector,
 } from "@tensorflow-models/coco-ssd";
+import { getActivityLabelTheme, isLockedInActivity } from "@/lib/ar-label-activity-colors";
 import type { DetectedPerson, FrameAnalysis } from "@/lib/types/room";
+import { ArLabelColorLegend } from "@/components/panels/ar-label-color-legend";
 import { GlassPanel } from "@/components/ui/glass-panel";
 import { SectionHeader } from "@/components/panels/section-header";
 import { motion } from "framer-motion";
@@ -147,11 +149,16 @@ function drawTracks(
     const hasLabel = t.activity !== "detected";
     const isSending = !hasLabel && status === "sending";
     const isFailed = !hasLabel && status === "failed";
+    const activityTheme = hasLabel ? getActivityLabelTheme(t.activity) : null;
 
-    // Color by state
-    const boxColor = isFailed ? RED_SEMI : isSending ? AMBER_SEMI : EMERALD_SEMI;
-    const accentColor = isFailed ? RED : isSending ? AMBER : EMERALD;
-    const textColor = isFailed ? "rgb(252, 165, 165)" : isSending ? "rgb(253, 224, 71)" : "rgb(110, 231, 183)";
+    // Color by state (red/amber while waiting for Gemini; else activity-based)
+    const boxColor = isFailed ? RED_SEMI : isSending ? AMBER_SEMI : activityTheme?.boxSemi ?? EMERALD_SEMI;
+    const accentColor = isFailed ? RED : isSending ? AMBER : activityTheme?.accent ?? EMERALD;
+    const textColor = isFailed
+      ? "rgb(252, 165, 165)"
+      : isSending
+        ? "rgb(253, 224, 71)"
+        : activityTheme?.text ?? "rgb(110, 231, 183)";
 
     ctx.globalAlpha = alpha;
 
@@ -221,7 +228,7 @@ function drawTracks(
       ctx.beginPath(); ctx.moveTo(cx - 3, cy - 3); ctx.lineTo(cx + 3, cy + 3); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx + 3, cy - 3); ctx.lineTo(cx - 3, cy + 3); ctx.stroke();
     } else {
-      ctx.fillStyle = EMERALD;
+      ctx.fillStyle = activityTheme?.accent ?? EMERALD;
       ctx.beginPath();
       ctx.arc(lx + 10, ly + lh / 2, 3, 0, Math.PI * 2);
       ctx.fill();
@@ -233,7 +240,7 @@ function drawTracks(
 
     // Person badge
     const badgeR = 9, bx = x - 4, by = y - 4;
-    ctx.fillStyle = isFailed ? RED : isSending ? AMBER : EMERALD;
+    ctx.fillStyle = isFailed ? RED : isSending ? AMBER : activityTheme?.accent ?? EMERALD;
     ctx.beginPath();
     ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
     ctx.fill();
@@ -286,6 +293,8 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
 
   const [modelReady, setModelReady] = useState(false);
   const [personCount, setPersonCount] = useState(0);
+  /** When any visible labeled track is “locked in”, tint the header count chip pink. */
+  const [lockedInChip, setLockedInChip] = useState(false);
   const [sceneDescription, setSceneDescription] = useState("");
 
   // Load model
@@ -366,8 +375,11 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
         // Update React state for the header count — throttled to avoid re-renders
         const now = Date.now();
         if (now - lastCountUpdate > 500) {
-          const count = tracksRef.current.filter((t) => t.age >= MIN_AGE).length;
-          setPersonCount(count);
+          const visible = tracksRef.current.filter((t) => t.age >= MIN_AGE);
+          setPersonCount(visible.length);
+          setLockedInChip(
+            visible.some((t) => t.activity !== "detected" && isLockedInActivity(t.activity)),
+          );
           lastCountUpdate = now;
         }
       } catch {
@@ -501,6 +513,7 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
     tracksRef.current = [];
     inFlight.current = false;
     setPersonCount(0);
+    setLockedInChip(false);
     const canvas = canvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext("2d");
@@ -532,12 +545,22 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
             {hasVideo && (
               <span
                 className={`h-2 w-2 rounded-full ${
-                  modelReady ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-pulse"
+                  modelReady
+                    ? lockedInChip
+                      ? "bg-pink-400 animate-pulse"
+                      : "bg-emerald-400 animate-pulse"
+                    : "bg-amber-400 animate-pulse"
                 }`}
               />
             )}
             {personCount > 0 ? (
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90">
+              <span
+                className={
+                  lockedInChip
+                    ? "rounded-full border border-pink-400/30 bg-pink-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-pink-200/95"
+                    : "rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90"
+                }
+              >
                 {personCount} people
               </span>
             ) : null}
@@ -549,7 +572,9 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
         <p className="mt-1 text-[11px] text-white/40">{sceneDescription}</p>
       )}
 
-      <div className="relative mt-2 aspect-video w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/60">
+      <ArLabelColorLegend />
+
+      <div className="relative mt-3 aspect-video w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/60">
         {hasVideo ? (
           <>
             <video
