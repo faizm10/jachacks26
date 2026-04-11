@@ -111,7 +111,17 @@ function MediaExpandModal({ obj, onClose }: { obj: CamsLatestObject; onClose: ()
   );
 }
 
-function VideoTile({ obj, onExpand }: { obj: CamsLatestObject; onExpand: (o: CamsLatestObject) => void }) {
+function VideoTile({
+  obj,
+  selected,
+  onSelect,
+  onExpand,
+}: {
+  obj: CamsLatestObject;
+  selected: boolean;
+  onSelect: (o: CamsLatestObject) => void;
+  onExpand: (o: CamsLatestObject) => void;
+}) {
   const [errored, setErrored] = useState(false);
   const fileName = obj.path.split("/").pop() ?? obj.path;
 
@@ -120,8 +130,13 @@ function VideoTile({ obj, onExpand }: { obj: CamsLatestObject; onExpand: (o: Cam
   return (
     <button
       type="button"
-      onClick={() => onExpand(obj)}
-      className="group relative w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/40 text-left outline-none transition-[border-color,box-shadow] hover:border-white/[0.14] hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-white/25"
+      onClick={() => onSelect(obj)}
+      onDoubleClick={() => onExpand(obj)}
+      className={`group relative w-full overflow-hidden rounded-xl border text-left outline-none transition-all ${
+        selected
+          ? "border-emerald-400/40 shadow-[0_0_20px_rgba(52,211,153,0.12)] ring-1 ring-emerald-400/25"
+          : "border-white/[0.06] hover:border-white/[0.14] hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+      } bg-black/40 focus-visible:ring-2 focus-visible:ring-white/25`}
     >
       <div className="aspect-video w-full">
         {!errored ? (
@@ -153,16 +168,28 @@ function VideoTile({ obj, onExpand }: { obj: CamsLatestObject; onExpand: (o: Cam
         )}
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
-        <p className="truncate text-[11px] text-white/70">{fileName}</p>
+        <div className="flex items-center justify-between">
+          <p className="truncate text-[11px] text-white/70">{fileName}</p>
+          {selected && (
+            <span className="rounded-full bg-emerald-400/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-emerald-300">
+              Selected
+            </span>
+          )}
+        </div>
         <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-white/35 opacity-0 transition-opacity group-hover:opacity-100">
-          Click to enlarge
+          {selected ? "Double-click to enlarge" : "Click to analyze"}
         </p>
       </div>
     </button>
   );
 }
 
-export function CameraFeedPanel() {
+export interface CameraFeedPanelProps {
+  selectedUrl?: string | null;
+  onSelect?: (obj: CamsLatestObject) => void;
+}
+
+export function CameraFeedPanel({ selectedUrl, onSelect }: CameraFeedPanelProps) {
   const bucketName = getCamsBucketName();
   const { status, objects, error, refresh } = useCamsAllFeeds();
   const [expanded, setExpanded] = useState<CamsLatestObject | null>(null);
@@ -217,11 +244,24 @@ export function CameraFeedPanel() {
           </button>
         </div>
       ) : (
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {objects.map((obj) => (
-            <VideoTile key={obj.path} obj={obj} onExpand={setExpanded} />
-          ))}
-        </div>
+        <>
+          {!selectedUrl && objects.length > 0 && (
+            <p className="mt-2 text-xs text-white/40">
+              Select a feed to analyze
+            </p>
+          )}
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {objects.map((obj) => (
+              <VideoTile
+                key={obj.path}
+                obj={obj}
+                selected={obj.url === selectedUrl}
+                onSelect={(o) => onSelect?.(o)}
+                onExpand={setExpanded}
+              />
+            ))}
+          </div>
+        </>
       )}
       {expanded ? (
         <MediaExpandModal key={expanded.path} obj={expanded} onClose={closeExpanded} />
