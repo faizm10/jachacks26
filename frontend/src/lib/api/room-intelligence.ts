@@ -78,7 +78,8 @@ function analysisToInsights(analysis: FrameAnalysis): RoomInsight[] {
   for (const person of analysis.persons) {
     insights.push({
       id: `person-${person.id}`,
-      title: `Person detected — ${person.activity}`,
+      personId: person.id,
+      title: `Person ${person.id} — ${person.activity}`,
       detail: `Confidence ${Math.round(person.confidence * 100)}%`,
       timestamp: "Just now",
       severity: "calm",

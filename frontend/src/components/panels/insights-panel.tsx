@@ -15,9 +15,13 @@ const severityRing: Record<string, string> = {
 export function InsightsPanel({
   stats,
   insights,
+  selectedPersonId,
+  onPersonInsightClick,
 }: {
   stats: RoomStats;
   insights: RoomInsight[];
+  selectedPersonId?: string | null;
+  onPersonInsightClick?: (personId: string) => void;
 }) {
   return (
     <GlassPanel className="p-5">
@@ -29,7 +33,10 @@ export function InsightsPanel({
         <Stat label="Ambient" value={`${stats.ambientDb} dB`} hint="noise" />
       </div>
       <ul className="flex flex-col gap-2">
-        {insights.map((insight, i) => (
+        {insights.map((insight, i) => {
+          const clickable = Boolean(insight.personId && onPersonInsightClick);
+          const isSelected = insight.personId != null && insight.personId === selectedPersonId;
+          return (
           <motion.li
             key={insight.id}
             initial={{ opacity: 0, x: -8 }}
@@ -38,7 +45,21 @@ export function InsightsPanel({
             className={cn(
               "rounded-xl border px-4 py-3",
               severityRing[insight.severity] ?? severityRing.info,
+              clickable && "cursor-pointer transition-colors hover:border-white/25 hover:bg-white/[0.04]",
+              isSelected && "border-white/40 bg-white/[0.06] ring-1 ring-white/20",
             )}
+            role={clickable ? "button" : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            onClick={() => {
+              if (insight.personId && onPersonInsightClick) onPersonInsightClick(insight.personId);
+            }}
+            onKeyDown={(e) => {
+              if (!clickable || !insight.personId || !onPersonInsightClick) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onPersonInsightClick(insight.personId);
+              }
+            }}
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -50,7 +71,8 @@ export function InsightsPanel({
               </span>
             </div>
           </motion.li>
-        ))}
+          );
+        })}
       </ul>
     </GlassPanel>
   );

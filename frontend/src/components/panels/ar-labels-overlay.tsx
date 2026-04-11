@@ -21,6 +21,10 @@ interface TrackedPerson {
   missedFrames: number;
   age: number;
   activity: string;
+  /** Server / live-analysis person slot when matched (e.g. p0, p1). */
+  personId: string | null;
+  /** Confidence for displayed activity when from Gemini live analysis. */
+  activityConfidence?: number;
 }
 
 /* ── Stabilization ── */
@@ -29,6 +33,7 @@ const SMOOTHING = 0.5;
 const MAX_MISSED = 15;
 const MIN_AGE = 3;
 const IOU_THRESHOLD = 0.1;
+const LABEL_MATCH_DIST = 0.35;
 
 function iou(
   a: { x: number; y: number; w: number; h: number },
@@ -78,6 +83,8 @@ function updateTracks(tracks: TrackedPerson[], raw: RawDet[]): TrackedPerson[] {
         missedFrames: 0,
         age: t.age + 1,
         activity: t.activity,
+        personId: t.personId,
+        activityConfidence: t.activityConfidence,
       });
     } else if (t.missedFrames < MAX_MISSED) {
       out.push({ ...t, missedFrames: t.missedFrames + 1, age: t.age + 1 });
@@ -92,9 +99,81 @@ function updateTracks(tracks: TrackedPerson[], raw: RawDet[]): TrackedPerson[] {
       missedFrames: 0,
       age: 1,
       activity: "detected",
+      personId: null,
+      activityConfidence: undefined,
     });
   }
   return out;
+}
+
+/** One-to-one: each track gets at most one person, each person at most one track (nearest pairs first). */
+function assignLabelsGreedy(tracks: TrackedPerson[], persons: DetectedPerson[]): void {
+  if (persons.length === 0) return;
+
+  type Pair = { ti: number; d: number; person: DetectedPerson };
+  const pairs: Pair[] = [];
+
+  for (let ti = 0; ti < tracks.length; ti++) {
+    const t = tracks[ti];
+    if (t.age < MIN_AGE) continue;
+    const tcx = t.bbox.x + t.bbox.w / 2;
+    const tcy = t.bbox.y + t.bbox.h / 2;
+    for (const person of persons) {
+      const pcx = person.bbox.x + person.bbox.w / 2;
+      const pcy = person.bbox.y + person.bbox.h / 2;
+      const d = Math.hypot(tcx - pcx, tcy - pcy);
+      pairs.push({ ti, d, person });
+    }
+  }
+
+  pairs.sort((a, b) => a.d - b.d);
+  const usedTracks = new Set<number>();
+  const usedPersonIds = new Set<string>();
+
+  for (const { ti, d, person } of pairs) {
+    if (d >= LABEL_MATCH_DIST) break;
+    if (usedTracks.has(ti) || usedPersonIds.has(person.id)) continue;
+    usedTracks.add(ti);
+    usedPersonIds.add(person.id);
+    const t = tracks[ti];
+    t.personId = person.id;
+    t.activity = person.activity;
+    t.activityConfidence = person.confidence;
+  }
+
+  for (let ti = 0; ti < tracks.length; ti++) {
+    const t = tracks[ti];
+    if (t.age < MIN_AGE) continue;
+    if (usedTracks.has(ti)) continue;
+    t.personId = null;
+    t.activity = "detected";
+    t.activityConfidence = undefined;
+  }
+}
+
+function applyCachedGeminiNearest(tracks: TrackedPerson[], gPersons: DetectedPerson[]): void {
+  if (gPersons.length === 0) return;
+  for (const track of tracks) {
+    if (track.age < MIN_AGE) continue;
+    const tx = track.bbox.x + track.bbox.w / 2;
+    const ty = track.bbox.y + track.bbox.h / 2;
+    let bestDist = Infinity;
+    let bestAct = "detected";
+    for (const gp of gPersons) {
+      const gx = gp.bbox.x + gp.bbox.w / 2;
+      const gy = gp.bbox.y + gp.bbox.h / 2;
+      const d = Math.hypot(tx - gx, ty - gy);
+      if (d < bestDist) {
+        bestDist = d;
+        bestAct = gp.activity;
+      }
+    }
+    if (bestDist < LABEL_MATCH_DIST) {
+      track.activity = bestAct;
+      track.personId = null;
+      track.activityConfidence = undefined;
+    }
+  }
 }
 
 /* ── Model loader ── */
@@ -133,6 +212,7 @@ function drawTracks(
   cw: number,
   ch: number,
   status: GeminiDrawStatus,
+  highlightPersonId: string | null,
 ) {
   ctx.clearRect(0, 0, cw, ch);
   _frameCount++;
@@ -150,6 +230,8 @@ function drawTracks(
     const isSending = !hasLabel && status === "sending";
     const isFailed = !hasLabel && status === "failed";
     const activityTheme = hasLabel ? getActivityLabelTheme(t.activity) : null;
+    const isHighlight =
+      Boolean(highlightPersonId && t.personId && t.personId === highlightPersonId);
 
     // Color by state (red/amber while waiting for Gemini; else activity-based)
     const boxColor = isFailed ? RED_SEMI : isSending ? AMBER_SEMI : activityTheme?.boxSemi ?? EMERALD_SEMI;
@@ -162,12 +244,21 @@ function drawTracks(
 
     ctx.globalAlpha = alpha;
 
-    // Box
+    // Box (extra ring when insight row highlights this person)
+    if (isHighlight) {
+      ctx.strokeStyle = "rgba(255,255,255,0.95)";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
+      ctx.shadowColor = "rgba(255,255,255,0.6)";
+      ctx.shadowBlur = 14;
+      ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
+      ctx.shadowBlur = 0;
+    }
     ctx.strokeStyle = boxColor;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = isHighlight ? 3 : 2;
     ctx.strokeRect(x, y, w, h);
     ctx.shadowColor = accentColor;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = isHighlight ? 14 : 8;
     ctx.strokeRect(x, y, w, h);
     ctx.shadowBlur = 0;
 
@@ -182,7 +273,8 @@ function drawTracks(
     // Label text
     let labelText: string;
     if (hasLabel) {
-      labelText = `${t.activity}  ${Math.round(t.confidence * 100)}%`;
+      const actConf = t.activityConfidence ?? t.confidence;
+      labelText = `${t.activity}  ${Math.round(actConf * 100)}%`;
     } else if (isSending) {
       const dots = ".".repeat((Math.floor(_frameCount / 20) % 3) + 1);
       labelText = `analyzing${dots}`;
@@ -248,7 +340,12 @@ function drawTracks(
     ctx.font = "bold 10px ui-sans-serif, system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(String(i + 1), bx, by);
+    const badgeLabel = t.personId
+      ? t.personId.length <= 4
+        ? t.personId.toUpperCase()
+        : t.personId.slice(0, 3).toUpperCase()
+      : String(i + 1);
+    ctx.fillText(badgeLabel, bx, by);
     ctx.textAlign = "start";
     ctx.textBaseline = "alphabetic";
 
@@ -277,9 +374,22 @@ export interface ARLabelsOverlayProps {
   videoUrl: string | null;
   persons: DetectedPerson[];
   analyzing?: boolean;
+  /** Scene line from live `/api/analyze` — preferred when persons are present. */
+  liveSceneSummary?: string | null;
+  /** Highlights the bbox whose `personId` matches (from Live insights click). */
+  highlightedPersonId?: string | null;
 }
 
-export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
+export function ARLabelsOverlay({
+  videoUrl,
+  persons,
+  liveSceneSummary,
+  highlightedPersonId,
+}: ARLabelsOverlayProps) {
+  const latestPersonsRef = useRef<DetectedPerson[]>(persons);
+  latestPersonsRef.current = persons;
+  const highlightIdRef = useRef<string | null>(highlightedPersonId ?? null);
+  highlightIdRef.current = highlightedPersonId ?? null;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const tracksRef = useRef<TrackedPerson[]>([]);
@@ -346,30 +456,23 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
 
         tracksRef.current = updateTracks(tracksRef.current, raw);
 
-        // Apply cached Gemini labels to tracks by nearest position
-        const gPersons = cachedGeminiPersons.current;
-        if (gPersons.length > 0) {
-          for (const track of tracksRef.current) {
-            if (track.age < MIN_AGE) continue;
-            const tx = track.bbox.x + track.bbox.w / 2;
-            const ty = track.bbox.y + track.bbox.h / 2;
-            let bestDist = Infinity;
-            let bestAct = "detected";
-            for (const gp of gPersons) {
-              const gx = gp.bbox.x + gp.bbox.w / 2;
-              const gy = gp.bbox.y + gp.bbox.h / 2;
-              const d = Math.hypot(tx - gx, ty - gy);
-              if (d < bestDist) { bestDist = d; bestAct = gp.activity; }
-            }
-            if (bestDist < 0.35) {
-              track.activity = bestAct;
-            }
-          }
+        const livePersons = latestPersonsRef.current;
+        if (livePersons.length > 0) {
+          assignLabelsGreedy(tracksRef.current, livePersons);
+        } else {
+          applyCachedGeminiNearest(tracksRef.current, cachedGeminiPersons.current);
         }
 
         const ctx = canvas.getContext("2d");
         if (ctx) {
-          drawTracks(ctx, tracksRef.current, canvas.width, canvas.height, geminiStatus.current);
+          drawTracks(
+            ctx,
+            tracksRef.current,
+            canvas.width,
+            canvas.height,
+            geminiStatus.current,
+            highlightIdRef.current,
+          );
         }
 
         // Update React state for the header count — throttled to avoid re-renders
@@ -405,6 +508,10 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
 
   const analyzeOnce = useCallback(async () => {
     if (!videoUrl || inFlight.current) return;
+    if (latestPersonsRef.current.length > 0) {
+      geminiStatus.current = "done";
+      return;
+    }
 
     // Check persistent cache first
     const cached = analysisCacheRef.current.get(videoUrl);
@@ -476,6 +583,14 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
       inFlight.current = false;
     }
   }, [videoUrl]);
+
+  useEffect(() => {
+    const scene = (liveSceneSummary ?? "").trim();
+    if (persons.length > 0 && scene) {
+      setSceneDescription(scene);
+      geminiStatus.current = "done";
+    }
+  }, [persons, liveSceneSummary]);
 
   // Trigger analysis when video changes
   useEffect(() => {
@@ -580,6 +695,8 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
             <video
               ref={videoRef}
               key={videoUrl}
+              data-live-frame-capture=""
+              data-analysis-url={videoUrl ?? ""}
               className="h-full w-full object-contain"
               src={videoUrl}
               autoPlay
@@ -635,6 +752,7 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
         <ExpandedARModal
           videoUrl={videoUrl!}
           tracksRef={tracksRef}
+          highlightIdRef={highlightIdRef}
           geminiStatus={geminiStatus.current}
           expandedVideoRef={expandedVideoRef}
           expandedCanvasRef={expandedCanvasRef}
@@ -654,6 +772,7 @@ export function ARLabelsOverlay({ videoUrl }: ARLabelsOverlayProps) {
 function ExpandedARModal({
   videoUrl,
   tracksRef,
+  highlightIdRef,
   geminiStatus,
   expandedVideoRef,
   expandedCanvasRef,
@@ -664,6 +783,7 @@ function ExpandedARModal({
 }: {
   videoUrl: string;
   tracksRef: React.RefObject<TrackedPerson[]>;
+  highlightIdRef: React.RefObject<string | null>;
   geminiStatus: GeminiDrawStatus;
   expandedVideoRef: React.RefObject<HTMLVideoElement | null>;
   expandedCanvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -702,7 +822,14 @@ function ExpandedARModal({
 
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        drawTracks(ctx, tracksRef.current, canvas.width, canvas.height, geminiStatus);
+        drawTracks(
+          ctx,
+          tracksRef.current,
+          canvas.width,
+          canvas.height,
+          geminiStatus,
+          highlightIdRef.current,
+        );
       }
 
       expandedRafRef.current = requestAnimationFrame(loop);
@@ -712,7 +839,7 @@ function ExpandedARModal({
     return () => {
       if (expandedRafRef.current) cancelAnimationFrame(expandedRafRef.current);
     };
-  }, [tracksRef, expandedVideoRef, expandedCanvasRef, expandedRafRef, geminiStatus]);
+  }, [tracksRef, highlightIdRef, expandedVideoRef, expandedCanvasRef, expandedRafRef, geminiStatus]);
 
   return (
     <motion.div
