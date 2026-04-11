@@ -162,7 +162,10 @@ function CalibrationModal({
     !selectedCam ? 0 : cameraPts.length < 4 ? 1 : floorPts.length < 4 ? 2 : 3;
 
   const cameraId = selectedCam
-    ? (selectedCam.path.split("/").pop()?.replace(/\.[^.]+$/, "") ?? selectedCam.path)
+    ? (
+        selectedCam.path.split("/").pop()?.replace(/\.[^.]+$/, "") ??
+        selectedCam.path
+      ).trim().toLowerCase()
     : "";
 
   const handleSave = useCallback(async () => {
@@ -378,14 +381,17 @@ export function CorridorCalibrationPanel() {
   const [showModal, setShowModal] = useState(false);
   const [calibrations, setCalibrations] = useState<CorridorCalibration[]>([]);
   const [loadingCals, setLoadingCals] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
 
   const fetchCals = useCallback(async () => {
     setLoadingCals(true);
+    setListError(null);
     try {
       const cals = await listCalibrations();
       setCalibrations(cals);
-    } catch {
+    } catch (e) {
       setCalibrations([]);
+      setListError(e instanceof Error ? e.message : "Could not load calibrations");
     } finally {
       setLoadingCals(false);
     }
@@ -424,6 +430,11 @@ export function CorridorCalibrationPanel() {
       />
 
       <div className="mt-3 space-y-2">
+        {listError ? (
+          <p className="rounded-xl border border-amber-400/25 bg-amber-950/30 px-3 py-2 text-xs text-amber-100/90">
+            {listError}
+          </p>
+        ) : null}
         {loadingCals ? (
           <p className="text-xs text-white/35">Loading…</p>
         ) : calibrations.length === 0 ? (

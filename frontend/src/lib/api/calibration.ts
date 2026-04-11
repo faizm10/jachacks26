@@ -10,30 +10,51 @@ export interface CorridorCalibration {
 }
 
 function base(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+  const b = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+  if (!b) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is not set — add it in frontend/.env.local");
+  }
+  return b;
+}
+
+async function parseErrorDetail(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const j = JSON.parse(text) as { detail?: unknown };
+    if (j?.detail !== undefined) {
+      return Array.isArray(j.detail)
+        ? j.detail.map((x) => String(x)).join(", ")
+        : String(j.detail);
+    }
+  } catch {
+    /* ignore */
+  }
+  return text || `HTTP ${res.status}`;
 }
 
 export async function listCalibrations(): Promise<CorridorCalibration[]> {
   const res = await fetch(`${base()}/calibrations`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new Error(await parseErrorDetail(res));
   const json = (await res.json()) as { calibrations: CorridorCalibration[] };
   return json.calibrations;
 }
 
 export async function saveCalibration(cal: CorridorCalibration): Promise<void> {
-  const res = await fetch(`${base()}/calibrations/${encodeURIComponent(cal.camera_id)}`, {
+  const id = cal.camera_id.trim().toLowerCase();
+  const payload = { ...cal, camera_id: id };
+  const res = await fetch(`${base()}/calibrations/${encodeURIComponent(id)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(cal),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(await parseErrorDetail(res));
   }
 }
 
 export async function deleteCalibration(cameraId: string): Promise<void> {
-  const res = await fetch(`${base()}/calibrations/${encodeURIComponent(cameraId)}`, {
+  const id = cameraId.trim().toLowerCase();
+  const res = await fetch(`${base()}/calibrations/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

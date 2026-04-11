@@ -5,12 +5,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import calibrations as cal_store
-from app.calibrations import CorridorCalibration
+from app.calibrations import CorridorCalibration, normalize_camera_id
 from app.floorplan import AnalyzeRequest, FloorPlanAnalyzeResponse, analyze_from_url
 
 app = FastAPI(title="Room Intelligence API")
 
-_origins = os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+_origins = os.environ.get(
+    "CORS_ALLOW_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+)
 _allow_origins = [o.strip() for o in _origins.split(",") if o.strip()]
 
 app.add_middleware(
@@ -77,8 +80,14 @@ def save_calibration(camera_id: str, body: CorridorCalibration) -> dict:
     if len(body.camera_pts) != len(body.floor_pts):
         raise HTTPException(status_code=400, detail="camera_pts and floor_pts must have the same length")
     body = body.model_copy(update={"camera_id": camera_id})
-    cal_store.upsert(body)
-    return {"saved": True, "camera_id": camera_id}
+    try:
+        cal_store.upsert(body)
+    except OSError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not write calibrations file ({cal_store.STORE_PATH}): {e}",
+        ) from e
+    return {"saved": True, "camera_id": normalize_camera_id(camera_id)}
 
 
 @app.delete("/calibrations/{camera_id}")

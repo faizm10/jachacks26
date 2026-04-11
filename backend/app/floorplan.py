@@ -33,8 +33,8 @@ GRID_H = int(os.environ.get("FLOORPLAN_GRID_H", "24"))
 MAX_BYTES = int(os.environ.get("FLOORPLAN_MAX_BYTES", str(25 * 1024 * 1024)))
 MAX_SECONDS = float(os.environ.get("FLOORPLAN_MAX_SECONDS", "12"))
 FRAME_STRIDE = int(os.environ.get("FLOORPLAN_FRAME_STRIDE", "2"))
-# HOG is slow — sample every N frames (override with env)
-HOG_STRIDE = int(os.environ.get("FLOORPLAN_HOG_STRIDE", "10"))
+# Sample every N frames for person detection (MOG2 is fast so can be lower)
+HOG_STRIDE = int(os.environ.get("FLOORPLAN_HOG_STRIDE", "4"))
 PROCESS_W = int(os.environ.get("FLOORPLAN_PROCESS_W", "320"))
 PROCESS_H = int(os.environ.get("FLOORPLAN_PROCESS_H", "180"))
 
@@ -78,48 +78,67 @@ class FloorPlanAnalyzeResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# HOG person detection pipeline
+# MOG2 background subtraction pipeline (replaces HOG)
+#
+# For a fixed security camera, the background (walls, furniture, floor) is
+# static. MOG2 learns this background over the first N frames, then any
+# moving pixel = person. This gives:
+#   • Accurate blob shapes (real silhouettes, not rectangle approximations)
+#   • No false positives from furniture / signs
+#   • Much faster than HOG sliding-window search
+#   • Better foot-position estimation (bottom of actual silhouette)
 # ---------------------------------------------------------------------------
 
-def _get_hog() -> cv2.HOGDescriptor:
-    hog = cv2.HOGDescriptor()
-    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-    return hog
+# Minimum/maximum blob area as a fraction of the frame area
+_BLOB_AREA_MIN_FRAC = 0.0008   # ~0.08% — filters out tiny noise
+_BLOB_AREA_MAX_FRAC = 0.30     # ~30%  — filters out full-frame background errors
+_WARMUP_FRAMES = 25            # frames consumed to build background model before detection
 
 
-def _detect_feet(
+def _feet_from_frame(
     frame_bgr: np.ndarray,
-    hog: cv2.HOGDescriptor,
+    mog2: cv2.BackgroundSubtractorMOG2,
+    morph_kernel: np.ndarray,
 ) -> list[tuple[float, float]]:
     """
-    Run HOG+SVM person detector on a frame.
-    Returns foot positions (bottom-centre of each bounding box) in original pixel coords.
+    Apply MOG2 to one frame. Returns foot positions (x, y) in original pixel coords.
+    Foot = bottom-centre of each detected foreground blob.
     """
     h, w = frame_bgr.shape[:2]
-    scale = min(1.0, 640.0 / w)
-    if scale < 0.99:
-        small = cv2.resize(frame_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-    else:
-        small = frame_bgr
-        scale = 1.0
+    frame_area = h * w
+    min_area = frame_area * _BLOB_AREA_MIN_FRAC
+    max_area = frame_area * _BLOB_AREA_MAX_FRAC
 
-    rects, _weights = hog.detectMultiScale(
-        small,
-        winStride=(8, 8),
-        padding=(4, 4),
-        scale=1.05,
-        hitThreshold=0.0,
-        groupThreshold=2,
-        useMeanshiftGrouping=False,
-    )
+    fg = mog2.apply(frame_bgr)
+
+    # Clean up: remove isolated noise, fill holes in silhouettes
+    fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN,  morph_kernel)
+    fg = cv2.morphologyEx(fg, cv2.MORPH_CLOSE, morph_kernel)
+    fg = cv2.dilate(fg, morph_kernel, iterations=2)
+
+    # Connected components → blobs
+    num_labels, _labels, stats, _centroids = cv2.connectedComponentsWithStats(fg, connectivity=8)
 
     feet: list[tuple[float, float]] = []
-    if len(rects) == 0:
-        return feet
-    for x, y, bw, bh in rects:
-        fx = (x + bw / 2.0) / scale
-        fy = (y + bh) / scale
+    for lab in range(1, num_labels):
+        area = int(stats[lab, cv2.CC_STAT_AREA])
+        if not (min_area <= area <= max_area):
+            continue
+        bx  = int(stats[lab, cv2.CC_STAT_LEFT])
+        by  = int(stats[lab, cv2.CC_STAT_TOP])
+        bw  = int(stats[lab, cv2.CC_STAT_WIDTH])
+        bh  = int(stats[lab, cv2.CC_STAT_HEIGHT])
+
+        # Aspect-ratio filter: a standing person is taller than wide
+        aspect = bh / max(bw, 1)
+        if aspect < 0.6:       # too flat — likely a shadow or floor reflection
+            continue
+
+        # Foot = bottom-centre of the foreground silhouette
+        fx = bx + bw / 2.0
+        fy = by + bh * 0.97   # 97% down = actual floor contact (avoids background fringe)
         feet.append((fx, fy))
+
     return feet
 
 
@@ -160,14 +179,23 @@ def _person_heatmap(
     max_frames: int,
 ) -> tuple[np.ndarray, int]:
     """
-    Sample frames at HOG_STRIDE intervals, detect people, transform foot positions
-    through homography H, accumulate onto density grid (floor_h x floor_w).
-    Returns (density float64, total_detections).
+    Use MOG2 background subtraction to detect people in each sampled frame,
+    transform foot positions through homography H, accumulate onto a density
+    grid (floor_h × floor_w).  Returns (density float64, total_detections).
     """
     density = np.zeros((cal.floor_h, cal.floor_w), dtype=np.float64)
-    hog = _get_hog()
+
+    # MOG2: learns background over first _WARMUP_FRAMES, then subtracts it
+    mog2 = cv2.createBackgroundSubtractorMOG2(
+        history=200,
+        varThreshold=40,      # lower = more sensitive to subtle movement
+        detectShadows=False,  # shadows off — faster and avoids false feet
+    )
+    morph_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+
     total_det = 0
     read_idx = 0
+    frame_count = 0
 
     while read_idx < max_frames:
         cap.set(cv2.CAP_PROP_POS_FRAMES, read_idx)
@@ -175,10 +203,12 @@ def _person_heatmap(
         if not ok:
             break
 
-        feet = _detect_feet(frame, hog)
-        total_det += len(feet)
+        frame_count += 1
+        feet = _feet_from_frame(frame, mog2, morph_kernel)
 
-        if feet:
+        # Skip detection during warm-up — MOG2 is still learning the background
+        if frame_count > _WARMUP_FRAMES and feet:
+            total_det += len(feet)
             pts_cam = np.array([[fx, fy] for fx, fy in feet], dtype=np.float32).reshape(-1, 1, 2)
             pts_floor = cv2.perspectiveTransform(pts_cam, H).reshape(-1, 2)
             for fpx, fpy in pts_floor:
@@ -188,14 +218,15 @@ def _person_heatmap(
 
         read_idx += HOG_STRIDE
 
-    # Gaussian blur for smooth heatmap from sparse point detections
-    sigma = max(cal.floor_h // 35, 12)
+    # Gaussian blur — spread each detection point into a smooth footprint
+    # Radius scaled to floor plan size so it feels right at any resolution
+    sigma = max(cal.floor_h // 30, 15)
     if density.max() > 0:
         density = cv2.GaussianBlur(
             density.astype(np.float32), (0, 0), sigmaX=sigma, sigmaY=sigma
         ).astype(np.float64)
 
-    # Zero outside corridor
+    # Zero outside corridor polygon
     density *= mask.astype(np.float64) / 255.0
     return density, total_det
 

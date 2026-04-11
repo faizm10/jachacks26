@@ -12,7 +12,19 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-STORE_PATH = Path(os.environ.get("CALIBRATIONS_PATH", "calibrations.json"))
+# Default next to backend/ so writes work even if uvicorn cwd is repo root.
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_DEFAULT_STORE = _BACKEND_DIR / "calibrations.json"
+STORE_PATH = Path(os.environ.get("CALIBRATIONS_PATH", str(_DEFAULT_STORE)))
+
+
+def _norm_camera_id(camera_id: str) -> str:
+    return camera_id.strip().lower()
+
+
+def normalize_camera_id(camera_id: str) -> str:
+    """Stable key for storage and lookup (case-insensitive)."""
+    return _norm_camera_id(camera_id)
 
 
 class CorridorCalibration(BaseModel):
@@ -34,31 +46,42 @@ def load_all() -> dict[str, CorridorCalibration]:
         return {}
     try:
         raw = json.loads(STORE_PATH.read_text())
-        return {k: CorridorCalibration(**v) for k, v in raw.items()}
+        out: dict[str, CorridorCalibration] = {}
+        for k, v in raw.items():
+            nid = _norm_camera_id(str(k))
+            row = dict(v) if isinstance(v, dict) else v
+            if isinstance(row, dict):
+                row["camera_id"] = nid
+            out[nid] = CorridorCalibration(**row)
+        return out
     except Exception:
         return {}
 
 
 def save_all(cals: dict[str, CorridorCalibration]) -> None:
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STORE_PATH.write_text(
-        json.dumps({k: v.model_dump() for k, v in cals.items()}, indent=2)
+        json.dumps({k: v.model_dump() for k, v in cals.items()}, indent=2),
+        encoding="utf-8",
     )
 
 
 def get(camera_id: str) -> CorridorCalibration | None:
-    return load_all().get(camera_id)
+    return load_all().get(_norm_camera_id(camera_id))
 
 
 def upsert(cal: CorridorCalibration) -> None:
     cals = load_all()
-    cals[cal.camera_id] = cal
+    nid = _norm_camera_id(cal.camera_id)
+    cals[nid] = cal.model_copy(update={"camera_id": nid})
     save_all(cals)
 
 
 def delete(camera_id: str) -> bool:
     cals = load_all()
-    if camera_id not in cals:
+    nid = _norm_camera_id(camera_id)
+    if nid not in cals:
         return False
-    del cals[camera_id]
+    del cals[nid]
     save_all(cals)
     return True

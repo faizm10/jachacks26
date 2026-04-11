@@ -41,7 +41,7 @@ export function InteractiveFloorPlanPanel({
       clipPath && /img[\s_-]*5530/i.test(clipPath.toLowerCase()) ? true : undefined;
     // Derive camera_id from filename — backend will look up corridor calibration if one exists
     const cameraId = clipPath
-      ? (clipPath.split("/").pop()?.replace(/\.[^.]+$/, "") ?? undefined)
+      ? (clipPath.split("/").pop()?.replace(/\.[^.]+$/, "")?.trim().toLowerCase() ?? undefined)
       : undefined;
     try {
       const next = await analyzeFloorplanFromVideo(url, { corridorMap, cameraId });
