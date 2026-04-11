@@ -41,6 +41,7 @@ export const mockFloorPlan: FloorPlanData = {
   roomName: "Studio A",
   width: 100,
   height: 100,
+  source: "mock",
   zones: [
     { id: "z1", label: "Table", x: 32, y: 28, w: 36, h: 28, occupancy: 0.72 },
     { id: "z2", label: "Window", x: 8, y: 18, w: 22, h: 48, occupancy: 0.22 },

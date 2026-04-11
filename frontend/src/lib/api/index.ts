@@ -1,3 +1,4 @@
+export { analyzeFloorplanFromVideo, FloorplanApiError } from "./floorplan";
 export { apiFetch, getApiBaseUrl } from "./client";
 export {
   getBehaviorLabels,

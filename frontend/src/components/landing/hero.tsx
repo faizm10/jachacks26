@@ -54,8 +54,8 @@ export function Hero() {
         <GlassLinkButton href="/dashboard" variant="primary">
           View demo
         </GlassLinkButton>
-        <GlassLinkButton href="/dashboard#floor-plan" variant="ghost">
-          See floor plan
+        <GlassLinkButton href="/spatial-map" variant="ghost">
+          Spatial map
         </GlassLinkButton>
       </motion.div>
     </motion.div>
