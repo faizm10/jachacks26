@@ -60,3 +60,29 @@ export interface RoomSnapshot {
   behaviorLabels: BehaviorLabel[];
   heatmap: HeatmapCell[];
 }
+
+/* ── Backend analysis types ── */
+
+export interface DetectedPerson {
+  id: string;
+  /** Bounding box as fractions of image dimensions (0–1) */
+  bbox: { x: number; y: number; w: number; h: number };
+  /** Inferred activity, e.g. "sitting", "talking", "writing" */
+  activity: string;
+  confidence: number;
+}
+
+export interface FrameAnalysis {
+  /** Number of people detected */
+  peopleCount: number;
+  /** Per-person detections */
+  persons: DetectedPerson[];
+  /** High-level scene description */
+  sceneDescription: string;
+  /** Overall activity labels for the room */
+  activities: string[];
+  /** ISO timestamp of when analysis ran */
+  analyzedAt: string;
+  /** URL of the frame that was analyzed */
+  frameUrl: string;
+}

@@ -115,26 +115,42 @@ function MediaExpandModal({ obj, onClose }: { obj: CamsLatestObject; onClose: ()
 
 function VideoTile({
   obj,
-  isActive,
-  onSelect,
-  onPreview,
+  isFloorActive,
+  isLiveSelected,
+  onPick,
+  onExpand,
 }: {
   obj: CamsLatestObject;
-  isActive: boolean;
-  onSelect: (o: CamsLatestObject) => void;
-  onPreview: (o: CamsLatestObject) => void;
+  isFloorActive: boolean;
+  isLiveSelected: boolean;
+  onPick: (o: CamsLatestObject) => void;
+  onExpand: (o: CamsLatestObject) => void;
 }) {
   const [errored, setErrored] = useState(false);
   const fileName = obj.path.split("/").pop() ?? obj.path;
 
+  const borderClass =
+    isFloorActive && isLiveSelected
+      ? "border-emerald-400/45 border-sky-400/45 shadow-[0_0_0_1px_rgba(56,189,248,0.15),0_0_20px_rgba(52,211,153,0.12)]"
+      : isFloorActive
+        ? "border-sky-400/50 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_8px_32px_rgba(0,0,0,0.4)]"
+        : isLiveSelected
+          ? "border-emerald-400/40 shadow-[0_0_20px_rgba(52,211,153,0.12)] ring-1 ring-emerald-400/25"
+          : "border-white/[0.06] hover:border-white/[0.18] hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]";
+
   return (
     <div
-      className={`group relative w-full overflow-hidden rounded-2xl border bg-black/40 transition-all cursor-pointer ${
-        isActive
-          ? "border-sky-400/50 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_8px_32px_rgba(0,0,0,0.4)]"
-          : "border-white/[0.06] hover:border-white/[0.18] hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
-      }`}
-      onClick={() => onSelect(obj)}
+      role="button"
+      tabIndex={0}
+      onClick={() => onPick(obj)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onPick(obj);
+        }
+      }}
+      onDoubleClick={() => onExpand(obj)}
+      className={`group relative w-full cursor-pointer overflow-hidden rounded-2xl border bg-black/40 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-white/25 ${borderClass}`}
     >
       <div className="aspect-video min-h-[11.5rem] w-full bg-black sm:min-h-[13rem] lg:min-h-[14.5rem]">
         {!errored ? (
@@ -167,43 +183,63 @@ function VideoTile({
         )}
       </div>
 
-      {/* Active indicator */}
-      {isActive && (
-        <div className="pointer-events-none absolute left-2 top-2">
+      <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-1">
+        {isFloorActive ? (
           <span className="rounded-full border border-sky-400/40 bg-sky-500/25 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">
-            Analyzing
+            Floor map
           </span>
-        </div>
-      )}
+        ) : null}
+        {isLiveSelected ? (
+          <span className="rounded-full border border-emerald-400/35 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-200">
+            Live AI
+          </span>
+        ) : null}
+      </div>
 
-      {/* Expand button — only on hover, stops propagation so it doesn't trigger onSelect */}
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); onPreview(obj); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onExpand(obj);
+        }}
         className="absolute right-2 top-2 rounded-lg border border-white/15 bg-black/60 px-2 py-1 text-[10px] font-semibold text-white/70 backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80 hover:text-white"
       >
         ↗
       </button>
 
-      {/* Filename + tap-to-analyze hint */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-3 py-3 sm:px-4 sm:py-3.5">
         <p className="truncate text-xs font-medium text-white/80 sm:text-[13px]">{fileName}</p>
-        {!isActive && (
-          <p className="mt-0.5 text-[10px] text-white/40 opacity-0 transition-opacity group-hover:opacity-100 sm:text-[11px]">
-            Click to analyze on floor plan
-          </p>
-        )}
+        <p className="mt-0.5 text-[10px] text-white/40 opacity-0 transition-opacity group-hover:opacity-100 sm:text-[11px]">
+          {isLiveSelected && isFloorActive
+            ? "Double-click to enlarge · drives floor plan + live analysis"
+            : isLiveSelected
+              ? "Double-click to enlarge · selected for live analysis"
+              : "Click for floor plan · optional live analysis from dashboard"}
+        </p>
       </div>
     </div>
   );
 }
 
-export function CameraFeedPanel() {
+export interface CameraFeedPanelProps {
+  selectedUrl?: string | null;
+  onSelect?: (obj: CamsLatestObject) => void;
+}
+
+export function CameraFeedPanel({ selectedUrl, onSelect }: CameraFeedPanelProps) {
   const bucketName = getCamsBucketName();
   const { selectFromTile, activeVideo } = useActiveVideo();
   const { status, objects, error, refresh } = useCamsAllFeeds();
   const [expanded, setExpanded] = useState<CamsLatestObject | null>(null);
   const closeExpanded = useCallback(() => setExpanded(null), []);
+
+  const handlePick = useCallback(
+    (o: CamsLatestObject) => {
+      selectFromTile(o);
+      onSelect?.(o);
+    },
+    [selectFromTile, onSelect],
+  );
 
   const subtitle =
     status === "ready"
@@ -254,17 +290,23 @@ export function CameraFeedPanel() {
           </button>
         </div>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
-          {objects.map((obj) => (
-            <VideoTile
-              key={obj.path}
-              obj={obj}
-              isActive={activeVideo?.path === obj.path}
-              onSelect={selectFromTile}
-              onPreview={setExpanded}
-            />
-          ))}
-        </div>
+        <>
+          {!selectedUrl && objects.length > 0 && onSelect ? (
+            <p className="mt-2 text-xs text-white/40">Select a feed for live analysis (optional)</p>
+          ) : null}
+          <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+            {objects.map((obj) => (
+              <VideoTile
+                key={obj.path}
+                obj={obj}
+                isFloorActive={activeVideo?.path === obj.path}
+                isLiveSelected={selectedUrl != null && obj.url === selectedUrl}
+                onPick={handlePick}
+                onExpand={setExpanded}
+              />
+            ))}
+          </div>
+        </>
       )}
       {expanded ? (
         <MediaExpandModal key={expanded.path} obj={expanded} onClose={closeExpanded} />
