@@ -142,10 +142,33 @@ def _feet_from_frame(
     return feet
 
 
+def _points_are_collinear(pts_pct: list[list[float]]) -> bool:
+    """Return True if all calibration points lie on a single line (degenerate homography)."""
+    if len(pts_pct) < 3:
+        return True
+    arr = np.array(pts_pct, dtype=np.float64)
+    # Check area of convex hull — collinear points have zero area
+    hull = cv2.convexHull(arr.astype(np.float32))
+    area = cv2.contourArea(hull)
+    return area < 1.0   # < 1 unit² in %-space → essentially collinear
+
+
 def _compute_homography(cal: CorridorCalibration, cam_w: int, cam_h: int) -> np.ndarray:
     """
     Compute 3x3 homography H: camera pixel coords -> floor plan pixel coords.
+    Raises ValueError with a human-readable message if the calibration is degenerate.
     """
+    if _points_are_collinear(cal.camera_pts):
+        raise ValueError(
+            f"Calibration '{cal.label or cal.camera_id}' has collinear camera points — "
+            "please redo calibration and click 4 corners that form a proper quadrilateral."
+        )
+    if _points_are_collinear(cal.floor_pts):
+        raise ValueError(
+            f"Calibration '{cal.label or cal.camera_id}' has collinear floor plan points — "
+            "please redo calibration and click 4 corners that form a proper quadrilateral."
+        )
+
     src = np.array(
         [[x / 100.0 * cam_w, y / 100.0 * cam_h] for x, y in cal.camera_pts],
         dtype=np.float32,
@@ -156,7 +179,10 @@ def _compute_homography(cal: CorridorCalibration, cam_w: int, cam_h: int) -> np.
     )
     H, _ = cv2.findHomography(src, dst, method=0)
     if H is None:
-        raise ValueError("Could not compute homography — calibration points may be collinear")
+        raise ValueError(
+            f"Calibration '{cal.label or cal.camera_id}': OpenCV could not compute homography. "
+            "Make sure the 4 point pairs are spread out and non-collinear."
+        )
     return H
 
 
@@ -309,13 +335,18 @@ def _analyze_with_calibration(
     nframes = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     cam_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1920)
     cam_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 1080)
+    cap.release()
 
     max_frames = int(fps * MAX_SECONDS)
     if nframes > 0:
         max_frames = min(max_frames, nframes)
 
+    # Validate homography before downloading — gives clear error if calibration is bad
     H = _compute_homography(cal, cam_w, cam_h)
     mask = _corridor_mask(cal)
+
+    # Re-open for frame reading
+    cap = cv2.VideoCapture(path)
 
     density, total_det = _person_heatmap(cap, H, cal, mask, max_frames)
     cap.release()
@@ -589,7 +620,18 @@ def analyze_from_url(
     path = _download_video(str(video_url))
     try:
         if calibration is not None:
-            return _analyze_with_calibration(path, calibration, video_url)
+            # Validate calibration before running the full pipeline.
+            # If the calibration is degenerate (e.g. collinear test points),
+            # fall back to frame-diff rather than returning a 500 error.
+            try:
+                return _analyze_with_calibration(path, calibration, video_url)
+            except ValueError as cal_err:
+                # Re-raise only if it's a fundamental video error, not a bad calibration
+                msg = str(cal_err)
+                if "collinear" in msg or "homography" in msg.lower() or "quadrilateral" in msg:
+                    print(f"[floorplan] Bad calibration ({calibration.camera_id}): {msg} — falling back to frame-diff")
+                    return _analyze_video_path_framediff(path, video_url, corridor_map)
+                raise
         return _analyze_video_path_framediff(path, video_url, corridor_map)
     finally:
         try:
