@@ -6,6 +6,8 @@ export interface RoomInsight {
   detail: string;
   timestamp: string;
   severity: InsightSeverity;
+  /** When set, row maps to a detected person — used for click-to-highlight on the video. */
+  personId?: string;
 }
 
 export interface FloorPlanZone {
@@ -44,6 +46,8 @@ export interface HeatmapCell {
   x: number;
   y: number;
   intensity: number;
+  /** Activity driving this cell’s color (AI behavior heatmap only). */
+  dominantActivity?: string;
 }
 
 export interface RoomStats {

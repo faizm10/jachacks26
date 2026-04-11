@@ -7,7 +7,6 @@ person detections + scene description.
 
 import json
 import os
-import uuid
 from datetime import datetime, timezone
 
 import httpx
@@ -170,11 +169,11 @@ async def analyze_frame(req: AnalyzeRequest) -> FrameAnalysis:
 
     # 3. Map into our schema
     persons: list[DetectedPerson] = []
-    for p in data.get("persons", []):
+    for i, p in enumerate(data.get("persons", [])):
         bbox_raw = p.get("bbox", {})
         persons.append(
             DetectedPerson(
-                id=str(uuid.uuid4())[:8],
+                id=f"p{i}",
                 bbox=BBox(
                     x=float(bbox_raw.get("x", 0)),
                     y=float(bbox_raw.get("y", 0)),
@@ -246,11 +245,11 @@ async def analyze_frame_base64(req: AnalyzeFrameBase64Request) -> FrameAnalysis:
         raise RuntimeError("Gemini analysis timed out after 30s")
 
     persons: list[DetectedPerson] = []
-    for p in data.get("persons", []):
+    for i, p in enumerate(data.get("persons", [])):
         bbox_raw = p.get("bbox", {})
         persons.append(
             DetectedPerson(
-                id=str(uuid.uuid4())[:8],
+                id=f"p{i}",
                 bbox=BBox(
                     x=float(bbox_raw.get("x", 0)),
                     y=float(bbox_raw.get("y", 0)),

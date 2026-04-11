@@ -5,6 +5,10 @@ import { CameraFeedPanel } from "@/components/panels/camera-feed-panel";
 import { HeatmapPanel } from "@/components/panels/heatmap-panel";
 import { InsightsPanel } from "@/components/panels/insights-panel";
 import { useLiveAnalysis } from "@/hooks/use-live-analysis";
+import {
+  buildActivityHeatmapFromPersons,
+  dominantActivityNearPeak,
+} from "@/lib/activity-heatmap";
 import type { RoomSnapshot } from "@/lib/types/room";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -22,17 +26,27 @@ const block = {
 export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
   // User-selected feed — analysis only runs when they pick one
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
+  /** Live insights person row → highlight matching bbox on AR / camera area. */
+  const [highlightPersonId, setHighlightPersonId] = useState<string | null>(null);
 
   const handleSelect = useCallback(
     (obj: { url: string }) => {
       // Toggle: clicking the same feed deselects it
       setSelectedUrl((prev) => (prev === obj.url ? null : obj.url));
+      setHighlightPersonId(null);
     },
     [],
   );
 
+  const handlePersonInsightClick = useCallback((personId: string) => {
+    document.getElementById("camera-feed")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlightPersonId((prev) => (prev === personId ? null : personId));
+  }, []);
+
   // Only analyze the explicitly selected feed
-  const { status: analysisStatus, analysis } = useLiveAnalysis(selectedUrl);
+  const { status: analysisStatus, analysis } = useLiveAnalysis(selectedUrl, {
+    realtimeFrameCaptureMs: 3200,
+  });
 
   // Merge live analysis into the snapshot when available
   const liveStats = useMemo(() => {
@@ -61,7 +75,8 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
     for (const person of analysis.persons) {
       insights.push({
         id: `person-${person.id}`,
-        title: `Person — ${person.activity}`,
+        personId: person.id,
+        title: `Person ${person.id} — ${person.activity}`,
         detail: `Confidence ${Math.round(person.confidence * 100)}%`,
         timestamp: "Just now",
         severity: "calm" as const,
@@ -69,6 +84,23 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
     }
     return insights.length > 0 ? insights : snapshot.insights;
   }, [analysis, snapshot.insights]);
+
+  const behaviorHeatmapCells = useMemo(() => {
+    if (analysis?.persons && analysis.persons.length > 0) {
+      return buildActivityHeatmapFromPersons(analysis.persons);
+    }
+    return snapshot.heatmap;
+  }, [analysis?.persons, snapshot.heatmap]);
+
+  const heatmapSubtitle =
+    analysis?.persons && analysis.persons.length > 0
+      ? "From AI labels — refreshes while you watch (~every 3s); brighter = more overlap in the current frame"
+      : "Aggregated movement density (demo)";
+
+  const heatmapPeakCaption = useMemo(() => {
+    if (!analysis?.persons?.length) return null;
+    return dominantActivityNearPeak(analysis.persons, behaviorHeatmapCells);
+  }, [analysis?.persons, behaviorHeatmapCells]);
 
   return (
     <motion.div
@@ -90,8 +122,14 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
             videoUrl={selectedUrl}
             persons={analysis?.persons ?? []}
             analyzing={analysisStatus === "analyzing"}
+            liveSceneSummary={analysis?.sceneDescription}
+            highlightedPersonId={highlightPersonId}
           />
-          <HeatmapPanel cells={snapshot.heatmap} />
+          <HeatmapPanel
+            cells={behaviorHeatmapCells}
+            subtitle={heatmapSubtitle}
+            peakCaption={analysis?.persons?.length ? heatmapPeakCaption : null}
+          />
         </motion.div>
         <motion.div variants={block} className="space-y-6 lg:col-span-5">
           <div id="spatial-map" className="scroll-mt-24">
@@ -115,7 +153,12 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
               </div>
             </Link>
           </div>
-          <InsightsPanel stats={liveStats} insights={liveInsights} />
+          <InsightsPanel
+            stats={liveStats}
+            insights={liveInsights}
+            selectedPersonId={highlightPersonId}
+            onPersonInsightClick={handlePersonInsightClick}
+          />
         </motion.div>
       </div>
     </motion.div>

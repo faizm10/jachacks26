@@ -31,15 +31,22 @@ from app.calibrations import CorridorCalibration
 GRID_W = int(os.environ.get("FLOORPLAN_GRID_W", "32"))
 GRID_H = int(os.environ.get("FLOORPLAN_GRID_H", "24"))
 MAX_BYTES = int(os.environ.get("FLOORPLAN_MAX_BYTES", str(25 * 1024 * 1024)))
-MAX_SECONDS = float(os.environ.get("FLOORPLAN_MAX_SECONDS", "12"))
+MAX_SECONDS = float(os.environ.get("FLOORPLAN_MAX_SECONDS", "20"))
 FRAME_STRIDE = int(os.environ.get("FLOORPLAN_FRAME_STRIDE", "2"))
-# Sample every N frames for YOLO detection
-HOG_STRIDE = int(os.environ.get("FLOORPLAN_HOG_STRIDE", "6"))
+# Sample every N frames for YOLO detection (lower = more samples, slower)
+HOG_STRIDE = int(os.environ.get("FLOORPLAN_HOG_STRIDE", "8"))
 PROCESS_W = int(os.environ.get("FLOORPLAN_PROCESS_W", "320"))
 PROCESS_H = int(os.environ.get("FLOORPLAN_PROCESS_H", "180"))
 # YOLOv8 config
-_YOLO_CONF = float(os.environ.get("FLOORPLAN_YOLO_CONF", "0.25"))
-_YOLO_IMGSZ = int(os.environ.get("FLOORPLAN_YOLO_IMGSZ", "640"))
+_YOLO_MODEL_NAME = os.environ.get("FLOORPLAN_YOLO_MODEL", "yolov8s.pt")  # "small" — 4× more accurate than nano
+_YOLO_CONF = float(os.environ.get("FLOORPLAN_YOLO_CONF", "0.10"))        # very low — catch seated/partial/phone-using people
+_YOLO_IOU = float(os.environ.get("FLOORPLAN_YOLO_IOU", "0.45"))          # NMS IoU overlap threshold
+_YOLO_IMGSZ = int(os.environ.get("FLOORPLAN_YOLO_IMGSZ", "1280"))        # larger = catches small/distant people
+# Tiling: fraction of frame height for the "background" crop (people far from camera)
+_TILE_SPLITS = [
+    (0.0, 0.60),   # top 60%  — background / distant people (small in frame)
+    (0.40, 1.0),   # bottom 60% — foreground / closer people
+]
 
 # Legacy ROIs (frame-diff fallback for IMG_5530)
 _DEFAULT_VIDEO_ROI = (8.0, 20.0, 84.0, 58.0)
@@ -81,48 +88,143 @@ class FloorPlanAnalyzeResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# YOLOv8 person detection pipeline
+# YOLOv8-small person detection pipeline  — maximum recall strategy
 #
-# Uses a pre-trained YOLOv8-nano model (auto-downloaded ~6 MB on first run).
-# Detects class 0 (person) in each sampled frame with a bounding box.
-# Foot position = bottom-centre of bounding box.
-# No warmup needed — works on individual frames without background modeling.
+# Security cameras at height create two detection challenges:
+#   A) People far from the camera appear tiny (< 50px tall in a 1080p frame).
+#      Standard full-frame inference at 1280px still shrinks them too much.
+#      → Tiled inference: crop each region and run at full imgsz so small
+#        people appear large relative to the input.
+#
+#   B) Mixed lighting (bright windows + fluorescent strips) creates regions
+#      that are over-exposed or shadowed, hiding people from the model.
+#      → CLAHE contrast equalisation on the L channel of LAB space.
+#
+#   C) Low-activity poses (phone, laptop, head-down) produce low YOLO scores.
+#      → Very low confidence threshold (0.10) to catch edge cases.
+#
+# Inference passes per frame:
+#   1. Full frame + TTA (augment=True: 3 scales × 2 flips internally)
+#   2. Full frame CLAHE (catches people in harsh lighting)
+#   3-N. Tiled crops at original resolution (catches small/distant people)
+#   All passes merged with cross-pass IoU NMS.
 # ---------------------------------------------------------------------------
 
 _yolo_model = None  # lazy singleton
 
 
 def _get_yolo():
-    """Load YOLOv8-nano once and cache as module-level singleton."""
+    """Load YOLOv8-small once and cache as module-level singleton."""
     global _yolo_model
     if _yolo_model is None:
         from ultralytics import YOLO  # noqa: PLC0415
-        _yolo_model = YOLO("yolov8n.pt")
+        _yolo_model = YOLO(_YOLO_MODEL_NAME)
     return _yolo_model
+
+
+def _clahe_enhance(frame_bgr: np.ndarray) -> np.ndarray:
+    """CLAHE on L channel of LAB — equalises contrast across tiles of the frame."""
+    lab = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2LAB)
+    l_ch, a_ch, b_ch = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+    return cv2.cvtColor(cv2.merge([clahe.apply(l_ch), a_ch, b_ch]), cv2.COLOR_LAB2BGR)
+
+
+def _run_yolo(
+    model,
+    img_bgr: np.ndarray,
+    offset_x: float = 0.0,
+    offset_y: float = 0.0,
+    augment: bool = False,
+) -> list[tuple[float, float, float, float, float]]:
+    """
+    Single YOLO inference pass on img_bgr.
+    offset_x / offset_y translate tile-local coords back to full-frame coords.
+    Returns [(x1, y1, x2, y2, conf), ...] in full-frame pixel coords.
+    """
+    results = model(
+        img_bgr,
+        classes=[0],
+        conf=_YOLO_CONF,
+        iou=_YOLO_IOU,
+        imgsz=_YOLO_IMGSZ,
+        augment=augment,
+        verbose=False,
+    )
+    out: list[tuple[float, float, float, float, float]] = []
+    boxes = results[0].boxes
+    if boxes is not None and len(boxes):
+        xyxy = boxes.xyxy.cpu().numpy()
+        confs = boxes.conf.cpu().numpy()
+        for (x1, y1, x2, y2), c in zip(xyxy, confs):
+            out.append((
+                float(x1) + offset_x, float(y1) + offset_y,
+                float(x2) + offset_x, float(y2) + offset_y,
+                float(c),
+            ))
+    return out
+
+
+def _iou(a: tuple, b: tuple) -> float:
+    ix1 = max(a[0], b[0]); iy1 = max(a[1], b[1])
+    ix2 = min(a[2], b[2]); iy2 = min(a[3], b[3])
+    if ix2 <= ix1 or iy2 <= iy1:
+        return 0.0
+    inter = (ix2 - ix1) * (iy2 - iy1)
+    union = (a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - inter
+    return inter / max(union, 1e-6)
+
+
+def _nms_merge(
+    all_boxes: list[tuple[float, float, float, float, float]],
+    iou_thresh: float = 0.40,
+) -> list[tuple[float, float, float, float]]:
+    """Greedy NMS across all passes. Higher-conf box wins when IoU > threshold."""
+    kept: list[tuple[float, float, float, float]] = []
+    for box in sorted(all_boxes, key=lambda b: b[4], reverse=True):
+        if not any(_iou(box, (*k, 1.0)) > iou_thresh for k in kept):
+            kept.append((box[0], box[1], box[2], box[3]))
+    return kept
 
 
 def _feet_from_frame(frame_bgr: np.ndarray) -> list[tuple[float, float]]:
     """
-    Run YOLOv8 on one frame. Returns foot positions (x, y) in original pixel coords.
-    Foot = bottom-centre of each detected person bounding box.
+    Multi-pass YOLOv8 inference optimised for overhead security cameras.
+
+    Pass layout (per frame):
+      1. Full frame, augment=True  — global context, foreground people
+      2. Full frame CLAHE          — people in over/under-exposed zones
+      3+. Horizontal tile crops    — zooms into each region so small/distant
+                                     people fill more pixels at inference time
+
+    All detections are merged with IoU-NMS before computing foot positions.
+    Foot = bottom-centre of bbox (floor contact for standing; seat level for
+    seated people, which is still their actual floor position laterally).
     """
     model = _get_yolo()
-    results = model(
-        frame_bgr,
-        classes=[0],          # person only
-        conf=_YOLO_CONF,
-        imgsz=_YOLO_IMGSZ,
-        verbose=False,
-    )
-    feet: list[tuple[float, float]] = []
-    boxes = results[0].boxes
-    if boxes is not None and len(boxes):
-        xyxy = boxes.xyxy.cpu().numpy()  # shape (N, 4): x1 y1 x2 y2
-        for x1, y1, x2, y2 in xyxy:
-            fx = (float(x1) + float(x2)) / 2.0
-            fy = float(y2)              # bottom-centre = foot on the floor
-            feet.append((fx, fy))
-    return feet
+    h, w = frame_bgr.shape[:2]
+    clahe_frame = _clahe_enhance(frame_bgr)
+
+    all_boxes: list[tuple[float, float, float, float, float]] = []
+
+    # Pass 1 — full frame with TTA
+    all_boxes += _run_yolo(model, frame_bgr, augment=True)
+
+    # Pass 2 — CLAHE full frame (no TTA — already covered by pass 1 scale variety)
+    all_boxes += _run_yolo(model, clahe_frame, augment=False)
+
+    # Passes 3-N — horizontal tile crops on CLAHE frame
+    # Each crop covers a vertical band; running at _YOLO_IMGSZ magnifies
+    # small people who are distant from the camera.
+    for y_frac_start, y_frac_end in _TILE_SPLITS:
+        y0 = int(h * y_frac_start)
+        y1 = int(h * y_frac_end)
+        tile = clahe_frame[y0:y1, :]
+        all_boxes += _run_yolo(model, tile, offset_x=0.0, offset_y=float(y0), augment=False)
+
+    merged = _nms_merge(all_boxes)
+
+    return [((x1 + x2) / 2.0, y2) for x1, y1, x2, y2 in merged]
 
 
 def _points_are_collinear(pts_pct: list[list[float]]) -> bool:
@@ -345,7 +447,10 @@ def _analyze_with_calibration(
             "camera_id": cal.camera_id,
             "corridorLabel": cal.label or cal.camera_id,
             "totalDetections": total_det,
-            "hogStride": HOG_STRIDE,
+            "frameStride": HOG_STRIDE,
+            "yoloModel": _YOLO_MODEL_NAME,
+            "yoloConf": _YOLO_CONF,
+            "yoloImgsz": _YOLO_IMGSZ,
             "videoSize": {"w": cam_w, "h": cam_h},
             "floorPlanSize": {"w": cal.floor_w, "h": cal.floor_h},
         },
