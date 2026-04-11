@@ -61,7 +61,7 @@ export function useCamsBucketFeed(): UseCamsBucketFeedResult {
       setStatus("ready");
     } catch (e) {
       firstLoad.current = false;
-      const message = e instanceof Error ? e.message : "Failed to load cams bucket";
+      const message = e instanceof Error ? e.message : "Failed to load camera bucket";
       setError(message);
       setFrame(null);
       setStatus("error");
@@ -80,6 +80,10 @@ export function useCamsBucketFeed(): UseCamsBucketFeedResult {
 
   const displayUrl = useMemo(() => {
     if (!frame) return null;
+    // Do not append query params to signed URLs — can break token validation / video playback
+    if (frame.url.includes("token=")) {
+      return frame.url;
+    }
     const sep = frame.url.includes("?") ? "&" : "?";
     return `${frame.url}${sep}_rid=${revision}`;
   }, [frame, revision]);

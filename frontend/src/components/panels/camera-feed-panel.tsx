@@ -3,6 +3,7 @@
 import { GlassPanel } from "@/components/ui/glass-panel";
 import { SectionHeader } from "@/components/panels/section-header";
 import { useCamsBucketFeed } from "@/hooks/use-cams-bucket-feed";
+import { getCamsBucketName } from "@/lib/supabase/cams-bucket";
 import { motion } from "framer-motion";
 import { useCallback, useState } from "react";
 
@@ -43,6 +44,7 @@ function StatusBadge({ status }: { status: ReturnType<typeof useCamsBucketFeed>[
 }
 
 export function CameraFeedPanel() {
+  const bucketName = getCamsBucketName();
   const { status, frame, displayUrl, error, refresh } = useCamsBucketFeed();
   const [mediaError, setMediaError] = useState(false);
 
@@ -56,10 +58,10 @@ export function CameraFeedPanel() {
 
   const subtitle =
     status === "ready" && frame
-      ? `Supabase · cams / ${frame.path}`
+      ? `Supabase · ${bucketName} / ${frame.path}`
       : status === "unconfigured"
         ? "Add Supabase env vars to connect"
-        : "Storage bucket cams";
+        : `Storage bucket ${bucketName}`;
 
   return (
     <GlassPanel className="relative overflow-hidden p-5 min-h-[220px] lg:min-h-[280px]">
@@ -71,7 +73,7 @@ export function CameraFeedPanel() {
       <div className="relative mt-1 aspect-video w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/40">
         {status === "unconfigured" ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-            <p className="text-sm font-medium text-white/70">Connect the cams bucket</p>
+            <p className="text-sm font-medium text-white/70">Connect the {bucketName} bucket</p>
             <p className="max-w-md text-xs leading-relaxed text-white/45">
               Set <code className="rounded bg-white/[0.08] px-1 py-0.5 text-[11px]">NEXT_PUBLIC_SUPABASE_URL</code>{" "}
               and{" "}
@@ -79,7 +81,8 @@ export function CameraFeedPanel() {
                 NEXT_PUBLIC_SUPABASE_ANON_KEY
               </code>{" "}
               in <code className="rounded bg-white/[0.08] px-1 py-0.5 text-[11px]">frontend/.env.local</code>.
-              Create a Storage bucket named <span className="text-white/60">cams</span> and allow read access for
+              Create a Storage bucket (default name <span className="text-white/60">{bucketName}</span>, override with{" "}
+              <code className="text-[11px] text-white/50">NEXT_PUBLIC_CAMS_BUCKET</code>) and allow read access for
               your frames (see <code className="text-[11px]">.env.example</code> notes).
             </p>
           </div>
@@ -94,14 +97,12 @@ export function CameraFeedPanel() {
           </div>
         ) : status === "empty" ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
-            <p className="text-sm font-medium text-white/65">No media in cams yet</p>
+            <p className="text-sm font-medium text-white/65">No media in {bucketName} yet</p>
             <p className="max-w-sm text-xs text-white/40">
-              Upload images or short videos (jpg, png, webp, gif, mp4, webm) to the{" "}
-              <span className="text-white/55">cams</span> bucket
-              {process.env.NEXT_PUBLIC_CAMS_PREFIX
-                ? ` under prefix “${process.env.NEXT_PUBLIC_CAMS_PREFIX}”`
-                : ""}
-              . The newest file is shown automatically.
+              Upload <span className="text-white/55">.mp4</span> (or jpg, png, webp, gif, webm, mov) to the{" "}
+              <span className="text-white/55">{bucketName}</span> bucket. The newest file wins. If files are at the
+              bucket root, leave <code className="text-white/45">NEXT_PUBLIC_CAMS_PREFIX</code> unset — it is only for
+              a subfolder inside the bucket, not the bucket name.
             </p>
             <button
               type="button"

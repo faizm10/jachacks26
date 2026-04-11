@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { FileObject } from "@supabase/storage-js";
 
-export const CAMS_BUCKET = "cams" as const;
+/** Supabase Storage bucket for camera media (`cam`, `cams`, etc.) */
+export function getCamsBucketName(): string {
+  return process.env.NEXT_PUBLIC_CAMS_BUCKET?.trim() || "cam";
+}
 
 const MEDIA_IMAGE = /\.(jpe?g|png|webp|gif)$/i;
 const MEDIA_VIDEO = /\.(mp4|webm|mov)$/i;
@@ -8,7 +12,7 @@ const MEDIA_VIDEO = /\.(mp4|webm|mov)$/i;
 export type CamsMediaKind = "image" | "video";
 
 export interface CamsLatestObject {
-  /** Path inside the bucket, e.g. `lobby/frame.jpg` or `frame.jpg` */
+  /** Path inside the bucket, e.g. `lobby/frame.jpg` or `clips/file.mp4` */
   path: string;
   url: string;
   kind: CamsMediaKind;
@@ -31,51 +35,96 @@ function mediaKind(name: string): CamsMediaKind | null {
   return null;
 }
 
+function fileTime(f: FileObject): number {
+  return new Date(f.updated_at ?? f.created_at ?? 0).getTime();
+}
+
 /**
- * Lists objects in the `cams` bucket (single folder level) and returns the newest media file.
- * Upload frames to the bucket root or under `NEXT_PUBLIC_CAMS_PREFIX`.
+ * List one directory, then one level of subfolders (Supabase list() is not recursive).
+ */
+async function collectMediaCandidates(
+  client: SupabaseClient,
+  basePrefix: string,
+): Promise<{ path: string; file: FileObject; kind: CamsMediaKind }[]> {
+  const out: { path: string; file: FileObject; kind: CamsMediaKind }[] = [];
+
+  const bucket = getCamsBucketName();
+
+  const { data: top, error: topErr } = await client.storage.from(bucket).list(basePrefix, {
+    limit: 500,
+    offset: 0,
+    sortBy: { column: "updated_at", order: "desc" },
+  });
+
+  if (topErr) {
+    throw new Error(topErr.message);
+  }
+
+  for (const item of top ?? []) {
+    if (!item.name || item.name.endsWith("/")) continue;
+
+    const kindTop = mediaKind(item.name);
+    if (kindTop) {
+      out.push({ path: objectKey(basePrefix, item.name), file: item, kind: kindTop });
+      continue;
+    }
+
+    const subPrefix = objectKey(basePrefix, item.name);
+    const { data: inner, error: innerErr } = await client.storage.from(bucket).list(subPrefix, {
+      limit: 500,
+      offset: 0,
+      sortBy: { column: "updated_at", order: "desc" },
+    });
+
+    if (innerErr) {
+      continue;
+    }
+
+    for (const f of inner ?? []) {
+      if (!f.name || f.name.endsWith("/")) continue;
+      const k = mediaKind(f.name);
+      if (k) {
+        out.push({ path: objectKey(subPrefix, f.name), file: f, kind: k });
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Lists objects in the camera bucket (root + one subfolder level under optional prefix)
+ * and returns the newest media file.
  */
 export async function fetchLatestCamsObject(
   client: SupabaseClient,
   options?: { prefix?: string },
 ): Promise<CamsLatestObject | null> {
-  const prefix = normalizePrefix(options?.prefix ?? process.env.NEXT_PUBLIC_CAMS_PREFIX);
-
-  const { data: files, error } = await client.storage.from(CAMS_BUCKET).list(prefix, {
-    limit: 200,
-    offset: 0,
-    sortBy: { column: "updated_at", order: "desc" },
-  });
-
-  if (error) {
-    throw new Error(error.message);
+  const bucket = getCamsBucketName();
+  let prefix = normalizePrefix(options?.prefix ?? process.env.NEXT_PUBLIC_CAMS_PREFIX);
+  /* Common mistake: prefix is a folder *inside* the bucket, not the bucket id. Listing prefix === bucket yields empty when files live at root. */
+  if (prefix.length > 0 && prefix.toLowerCase() === bucket.toLowerCase()) {
+    console.warn(
+      `[Room Intelligence] Ignoring NEXT_PUBLIC_CAMS_PREFIX="${prefix}" — it matches the bucket id "${bucket}". Prefix must be a subfolder inside the bucket (or leave unset for root).`,
+    );
+    prefix = "";
   }
 
-  const rows = (files ?? []).filter((f) => {
-    if (!f.name || f.name.endsWith("/")) return false;
-    if (f.id == null) return false;
-    return mediaKind(f.name) != null;
-  });
+  const candidates = await collectMediaCandidates(client, prefix);
 
-  rows.sort((a, b) => {
-    const ta = new Date(a.updated_at ?? a.created_at ?? 0).getTime();
-    const tb = new Date(b.updated_at ?? b.created_at ?? 0).getTime();
-    return tb - ta;
-  });
+  if (candidates.length === 0) return null;
 
-  const file = rows[0];
-  if (!file) return null;
+  candidates.sort((a, b) => fileTime(b.file) - fileTime(a.file));
+  const { path, file, kind } = candidates[0]!;
 
-  const path = objectKey(prefix, file.name);
-  const kind = mediaKind(file.name)!;
   const useSigned = process.env.NEXT_PUBLIC_CAMS_USE_SIGNED_URLS === "true";
 
   if (useSigned) {
     const { data: signed, error: signErr } = await client.storage
-      .from(CAMS_BUCKET)
+      .from(bucket)
       .createSignedUrl(path, 60 * 30);
     if (signErr || !signed?.signedUrl) {
-      throw new Error(signErr?.message ?? "Could not create signed URL for cams object");
+      throw new Error(signErr?.message ?? "Could not create signed URL for camera object");
     }
     return {
       path,
@@ -85,7 +134,7 @@ export async function fetchLatestCamsObject(
     };
   }
 
-  const { data: pub } = client.storage.from(CAMS_BUCKET).getPublicUrl(path);
+  const { data: pub } = client.storage.from(bucket).getPublicUrl(path);
   return {
     path,
     url: pub.publicUrl,
