@@ -8,11 +8,21 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-[var(--background)]">
+    <div className="flex min-h-screen bg-background">
       <Sidebar open={open} onNavigate={() => setOpen(false)} />
       <div className="flex min-h-screen flex-1 flex-col lg:pl-0">
         <TopNav onMenuClick={() => setOpen((v) => !v)} />
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="relative flex-1 bg-background px-4 py-6 sm:px-6 lg:px-8">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-40"
+            aria-hidden
+            style={{
+              background:
+                "radial-gradient(ellipse 70% 45% at 50% 0%, rgba(120, 140, 255, 0.07), transparent 55%)",
+            }}
+          />
+          <div className="relative">{children}</div>
+        </main>
       </div>
     </div>
   );
