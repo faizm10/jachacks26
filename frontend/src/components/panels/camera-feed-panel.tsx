@@ -2,10 +2,12 @@
 
 import { GlassPanel } from "@/components/ui/glass-panel";
 import { SectionHeader } from "@/components/panels/section-header";
+import { useActiveVideo } from "@/components/room-intel/active-video-context";
 import { useCamsAllFeeds } from "@/hooks/use-cams-all-feeds";
 import { getCamsBucketName } from "@/lib/supabase/cams-bucket";
 import type { CamsLatestObject } from "@/lib/supabase/cams-bucket";
 import { motion } from "framer-motion";
+import { Clapperboard } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -111,59 +113,94 @@ function MediaExpandModal({ obj, onClose }: { obj: CamsLatestObject; onClose: ()
   );
 }
 
-function VideoTile({ obj, onExpand }: { obj: CamsLatestObject; onExpand: (o: CamsLatestObject) => void }) {
+function VideoTile({
+  obj,
+  isActive,
+  onSelect,
+  onPreview,
+}: {
+  obj: CamsLatestObject;
+  isActive: boolean;
+  onSelect: (o: CamsLatestObject) => void;
+  onPreview: (o: CamsLatestObject) => void;
+}) {
   const [errored, setErrored] = useState(false);
   const fileName = obj.path.split("/").pop() ?? obj.path;
 
-  const onError = useCallback(() => setErrored(true), []);
-
   return (
-    <button
-      type="button"
-      onClick={() => onExpand(obj)}
-      className="group relative w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/40 text-left outline-none transition-[border-color,box-shadow] hover:border-white/[0.14] hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-white/25"
+    <div
+      className={`group relative w-full overflow-hidden rounded-xl border bg-black/40 transition-all cursor-pointer ${
+        isActive
+          ? "border-sky-400/50 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_8px_32px_rgba(0,0,0,0.4)]"
+          : "border-white/[0.06] hover:border-white/[0.18] hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
+      }`}
+      onClick={() => onSelect(obj)}
     >
-      <div className="aspect-video w-full">
+      <div className="aspect-video w-full bg-black">
         {!errored ? (
           obj.kind === "video" ? (
             <video
               key={obj.url}
-              className="pointer-events-none h-full w-full object-cover"
+              className="h-full w-full object-cover"
               src={obj.url}
               autoPlay
               muted
               playsInline
               loop
-              onError={onError}
+              onError={() => setErrored(true)}
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               key={obj.url}
-              alt={`Camera frame ${obj.path}`}
+              alt={fileName}
               src={obj.url}
-              className="pointer-events-none h-full w-full object-cover"
-              onError={onError}
+              className="h-full w-full object-cover"
+              onError={() => setErrored(true)}
             />
           )
         ) : (
-          <div className="flex h-full w-full items-center justify-center">
+          <div className="flex h-full w-full items-center justify-center gap-2">
+            <Clapperboard className="h-7 w-7 text-white/25" />
             <p className="text-xs text-white/40">Failed to load</p>
           </div>
         )}
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
-        <p className="truncate text-[11px] text-white/70">{fileName}</p>
-        <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-white/35 opacity-0 transition-opacity group-hover:opacity-100">
-          Click to enlarge
-        </p>
+
+      {/* Active indicator */}
+      {isActive && (
+        <div className="pointer-events-none absolute left-2 top-2">
+          <span className="rounded-full border border-sky-400/40 bg-sky-500/25 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">
+            Analyzing
+          </span>
+        </div>
+      )}
+
+      {/* Expand button — only on hover, stops propagation so it doesn't trigger onSelect */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onPreview(obj); }}
+        className="absolute right-2 top-2 rounded-lg border border-white/15 bg-black/60 px-2 py-1 text-[10px] font-semibold text-white/70 backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80 hover:text-white"
+      >
+        ↗
+      </button>
+
+      {/* Filename + tap-to-analyze hint */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-3 py-2.5">
+        <p className="truncate text-[11px] font-medium text-white/75">{fileName}</p>
+        {!isActive && (
+          <p className="text-[9px] text-white/35 opacity-0 transition-opacity group-hover:opacity-100">
+            Click to analyze on floor plan
+          </p>
+        )}
       </div>
-    </button>
+    </div>
   );
 }
 
 export function CameraFeedPanel() {
   const bucketName = getCamsBucketName();
+  const { selectFromTile, activeVideo } = useActiveVideo();
   const { status, objects, error, refresh } = useCamsAllFeeds();
   const [expanded, setExpanded] = useState<CamsLatestObject | null>(null);
   const closeExpanded = useCallback(() => setExpanded(null), []);
@@ -219,7 +256,13 @@ export function CameraFeedPanel() {
       ) : (
         <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {objects.map((obj) => (
-            <VideoTile key={obj.path} obj={obj} onExpand={setExpanded} />
+            <VideoTile
+              key={obj.path}
+              obj={obj}
+              isActive={activeVideo?.path === obj.path}
+              onSelect={selectFromTile}
+              onPreview={setExpanded}
+            />
           ))}
         </div>
       )}

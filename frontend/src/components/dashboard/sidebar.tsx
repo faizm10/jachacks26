@@ -8,9 +8,15 @@ import { motion } from "framer-motion";
 
 const links = [
   { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard#camera-feed", label: "Camera feed" },
-  { href: "/dashboard#floor-plan", label: "Floor plan" },
+  { href: "/dashboard#camera-feed", label: "Motion clips" },
+  { href: "/spatial-map", label: "Spatial map" },
 ];
+
+function linkIsActive(pathname: string, href: string) {
+  if (href === "/dashboard") return pathname === "/dashboard";
+  if (href === "/spatial-map") return pathname === "/spatial-map";
+  return false;
+}
 
 export function Sidebar({
   open,
@@ -46,7 +52,7 @@ export function Sidebar({
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3 pb-6">
           {links.map((link) => {
-            const active = link.href === "/dashboard" && pathname === "/dashboard";
+            const active = linkIsActive(pathname, link.href);
             return (
               <Link
                 key={link.href}

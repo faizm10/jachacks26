@@ -6,6 +6,7 @@
     "dev": "npm run dev --prefix frontend",
     "build": "npm run build --prefix frontend",
     "lint": "npm run lint --prefix frontend",
-    "start": "npm run start --prefix frontend"
+    "start": "npm run start --prefix frontend",
+    "sync:floorplan": "mkdir -p frontend/public/floorplans && cp floor_plans/floorplan_transparent.png frontend/public/floorplans/floorplan_transparent.png"
   }
 }

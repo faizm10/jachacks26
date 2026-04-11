@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" aria-hidden="true">
+  <defs>
+    <linearGradient id="fpBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#12161c"/>
+      <stop offset="100%" stop-color="#0c0f14"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" fill="url(#fpBg)"/>
+
+  <!-- Exterior shell -->
+  <rect x="3" y="4" width="94" height="92" rx="0.8" fill="none" stroke="#3d4a5c" stroke-width="0.55"/>
+
+  <!-- Living (large NW) -->
+  <rect x="4.5" y="5.5" width="51" height="38" fill="#1a222c" stroke="#2f3a4a" stroke-width="0.35"/>
+  <text x="8" y="14" fill="#8b98ab" font-size="3.4" font-family="system-ui,sans-serif" font-weight="600">Living</text>
+  <!-- Sofa hint -->
+  <rect x="10" y="30" width="18" height="8" rx="1" fill="#252e3a" stroke="#384454" stroke-width="0.2"/>
+
+  <!-- Kitchen (NE) -->
+  <rect x="56.5" y="5.5" width="39" height="38" fill="#171d26" stroke="#2f3a4a" stroke-width="0.35"/>
+  <text x="60" y="14" fill="#8b98ab" font-size="3.4" font-family="system-ui,sans-serif" font-weight="600">Kitchen</text>
+  <rect x="62" y="22" width="14" height="10" rx="0.6" fill="#252e3a" stroke="#384454" stroke-width="0.2"/>
+
+  <!-- Wall between living & kitchen -->
+  <line x1="56" y1="5.5" x2="56" y2="43.5" stroke="#4a5668" stroke-width="0.6"/>
+
+  <!-- Hall (SW strip) -->
+  <rect x="4.5" y="44.5" width="28" height="24" fill="#151b24" stroke="#2f3a4a" stroke-width="0.35"/>
+  <text x="8" y="52" fill="#8b98ab" font-size="3.2" font-family="system-ui,sans-serif" font-weight="600">Hall</text>
+
+  <!-- Bath (under hall) -->
+  <rect x="4.5" y="69.5" width="28" height="26" fill="#131922" stroke="#2f3a4a" stroke-width="0.35"/>
+  <text x="8" y="78" fill="#8b98ab" font-size="3.2" font-family="system-ui,sans-serif" font-weight="600">Bath</text>
+  <rect x="10" y="82" width="12" height="10" rx="0.5" fill="#1e2632" stroke="#384454" stroke-width="0.2"/>
+
+  <!-- Bedroom (E side) -->
+  <rect x="33.5" y="44.5" width="62" height="51" fill="#181f29" stroke="#2f3a4a" stroke-width="0.35"/>
+  <text x="37" y="53" fill="#8b98ab" font-size="3.4" font-family="system-ui,sans-serif" font-weight="600">Bedroom</text>
+  <rect x="70" y="72" width="20" height="18" rx="0.8" fill="#252e3a" stroke="#384454" stroke-width="0.2"/>
+
+  <!-- Wall hall / bedroom -->
+  <line x1="33.5" y1="44.5" x2="33.5" y2="95.5" stroke="#4a5668" stroke-width="0.6"/>
+
+  <!-- Wall hall / bath horizontal -->
+  <line x1="4.5" y1="69" x2="32.5" y2="69" stroke="#4a5668" stroke-width="0.6"/>
+
+  <!-- Door swings (arc hints) -->
+  <path d="M 52 42 A 4 4 0 0 1 56 38" fill="none" stroke="#5a6578" stroke-width="0.25" opacity="0.7"/>
+  <path d="M 31 58 A 3 3 0 0 1 34 55" fill="none" stroke="#5a6578" stroke-width="0.25" opacity="0.7"/>
+
+  <!-- North arrow -->
+  <g transform="translate(88,10)">
+    <polygon points="0,0 -1.2,3.5 1.2,3.5" fill="#6b7c90"/>
+    <text x="-2" y="6.5" fill="#6b7c90" font-size="2.4" font-family="system-ui,sans-serif">N</text>
+  </g>
+</svg>

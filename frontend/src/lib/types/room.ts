@@ -16,6 +16,8 @@ export interface FloorPlanZone {
   w: number;
   h: number;
   occupancy: number;
+  /** Relative motion score from video analysis (optional) */
+  motionScore?: number;
 }
 
 export interface FloorPlanData {
@@ -23,6 +25,11 @@ export interface FloorPlanData {
   width: number;
   height: number;
   zones: FloorPlanZone[];
+  /** mock | video — how this map was produced */
+  source?: "mock" | "video";
+  /** data:image/png;base64,... heat underlay from motion pipeline */
+  overlayDataUrl?: string | null;
+  meta?: Record<string, unknown>;
 }
 
 export interface BehaviorLabel {
