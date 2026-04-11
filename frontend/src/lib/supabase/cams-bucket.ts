@@ -50,17 +50,24 @@ async function collectMediaCandidates(
 
   const bucket = getCamsBucketName();
 
-  const { data: top, error: topErr } = await client.storage.from(bucket).list(basePrefix, {
+  // Pass undefined (not "") when listing root — some Supabase client versions treat "" as a
+  // virtual empty-named subfolder rather than the bucket root.
+  const listPath = basePrefix || undefined;
+
+  const { data: top, error: topErr } = await client.storage.from(bucket).list(listPath, {
     limit: 500,
     offset: 0,
     sortBy: { column: "updated_at", order: "desc" },
   });
+
+  console.log("[cams-bucket] list", bucket, listPath ?? "(root)", "→", top?.length ?? 0, "items", topErr ?? "");
 
   if (topErr) {
     throw new Error(topErr.message);
   }
 
   for (const item of top ?? []) {
+    console.log("[cams-bucket] item:", item.name, "metadata:", item.metadata);
     if (!item.name || item.name.endsWith("/")) continue;
 
     const kindTop = mediaKind(item.name);
@@ -90,6 +97,47 @@ async function collectMediaCandidates(
   }
 
   return out;
+}
+
+/**
+ * Lists all media objects in the camera bucket (root + one subfolder level under optional prefix),
+ * sorted newest first.
+ */
+export async function fetchAllCamsObjects(
+  client: SupabaseClient,
+  options?: { prefix?: string },
+): Promise<CamsLatestObject[]> {
+  const bucket = getCamsBucketName();
+  let prefix = normalizePrefix(options?.prefix ?? process.env.NEXT_PUBLIC_CAMS_PREFIX);
+  if (prefix.length > 0 && prefix.toLowerCase() === bucket.toLowerCase()) {
+    console.warn(
+      `[Room Intelligence] Ignoring NEXT_PUBLIC_CAMS_PREFIX="${prefix}" — it matches the bucket id "${bucket}". Prefix must be a subfolder inside the bucket (or leave unset for root).`,
+    );
+    prefix = "";
+  }
+
+  const candidates = await collectMediaCandidates(client, prefix);
+  if (candidates.length === 0) return [];
+
+  candidates.sort((a, b) => fileTime(b.file) - fileTime(a.file));
+
+  const useSigned = process.env.NEXT_PUBLIC_CAMS_USE_SIGNED_URLS === "true";
+
+  const results: CamsLatestObject[] = [];
+  for (const { path, file, kind } of candidates) {
+    if (useSigned) {
+      const { data: signed, error: signErr } = await client.storage
+        .from(bucket)
+        .createSignedUrl(path, 60 * 30);
+      if (signErr || !signed?.signedUrl) continue;
+      results.push({ path, url: signed.signedUrl, kind, updatedAt: file.updated_at ?? file.created_at ?? null });
+    } else {
+      const { data: pub } = client.storage.from(bucket).getPublicUrl(path);
+      results.push({ path, url: pub.publicUrl, kind, updatedAt: file.updated_at ?? file.created_at ?? null });
+    }
+  }
+
+  return results;
 }
 
 /**
