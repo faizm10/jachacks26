@@ -19,6 +19,12 @@ class AnalyzeRequest(BaseModel):
     frame_url: str
 
 
+class AnalyzeFrameBase64Request(BaseModel):
+    """For live tracking: client captures a video frame and sends it as base64 JPEG."""
+    image_base64: str
+    mime_type: str = "image/jpeg"
+
+
 class BBox(BaseModel):
     x: float
     y: float
@@ -188,4 +194,67 @@ async def analyze_frame(req: AnalyzeRequest) -> FrameAnalysis:
         activities=data.get("activities", []),
         analyzedAt=datetime.now(timezone.utc).isoformat(),
         frameUrl=req.frame_url,
+    )
+
+
+def _parse_gemini_response(raw_text: str) -> dict:
+    """Shared JSON parser for Gemini responses."""
+    raw_text = raw_text.strip()
+    if raw_text.startswith("```"):
+        raw_text = raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text[3:]
+    if raw_text.endswith("```"):
+        raw_text = raw_text[:-3].strip()
+    if raw_text.startswith("json"):
+        raw_text = raw_text[4:].strip()
+    return json.loads(raw_text)
+
+
+async def analyze_frame_base64(req: AnalyzeFrameBase64Request) -> FrameAnalysis:
+    """Analyze a single base64-encoded frame — used for live tracking."""
+    import base64
+
+    image_bytes = base64.b64decode(req.image_base64)
+
+    client = _get_gemini_client()
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            genai.types.Content(
+                parts=[
+                    genai.types.Part.from_bytes(
+                        data=image_bytes, mime_type=req.mime_type
+                    ),
+                    genai.types.Part.from_text(text=ANALYSIS_PROMPT),
+                ]
+            )
+        ],
+    )
+
+    data = _parse_gemini_response(response.text)
+
+    persons: list[DetectedPerson] = []
+    for p in data.get("persons", []):
+        bbox_raw = p.get("bbox", {})
+        persons.append(
+            DetectedPerson(
+                id=str(uuid.uuid4())[:8],
+                bbox=BBox(
+                    x=float(bbox_raw.get("x", 0)),
+                    y=float(bbox_raw.get("y", 0)),
+                    w=float(bbox_raw.get("w", 0)),
+                    h=float(bbox_raw.get("h", 0)),
+                ),
+                activity=p.get("activity", "present"),
+                confidence=float(p.get("confidence", 0.5)),
+            )
+        )
+
+    return FrameAnalysis(
+        peopleCount=data.get("people_count", len(persons)),
+        persons=persons,
+        sceneDescription=data.get("scene_description", ""),
+        activities=data.get("activities", []),
+        analyzedAt=datetime.now(timezone.utc).isoformat(),
+        frameUrl="live-frame",
     )

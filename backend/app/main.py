@@ -9,7 +9,13 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 import time
 
-from app.analyze import AnalyzeRequest, FrameAnalysis, analyze_frame
+from app.analyze import (
+    AnalyzeFrameBase64Request,
+    AnalyzeRequest,
+    FrameAnalysis,
+    analyze_frame,
+    analyze_frame_base64,
+)
 
 app = FastAPI(title="Room Intelligence API")
 
@@ -52,5 +58,14 @@ async def analyze(req: AnalyzeRequest):
             del _analysis_cache[k]
 
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/analyze-frame", response_model=FrameAnalysis)
+async def analyze_frame_endpoint(req: AnalyzeFrameBase64Request):
+    """Analyze a single base64-encoded frame for live tracking."""
+    try:
+        return await analyze_frame_base64(req)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
