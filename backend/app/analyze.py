@@ -103,8 +103,46 @@ def _is_video(mime: str) -> bool:
     return mime.startswith("video/")
 
 
+def _analyze_video_sync(media_bytes: bytes, content_type: str) -> dict:
+    """Upload video to Gemini File API and analyze — blocking, run in thread pool."""
+    import tempfile
+    import time
+    import os as _os
+
+    client = _get_gemini_client()
+
+    ext = "." + content_type.split("/")[1]
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(media_bytes)
+        tmp_path = tmp.name
+
+    try:
+        uploaded = client.files.upload(file=tmp_path)
+        for _ in range(60):  # max 60s wait
+            if uploaded.state.name != "PROCESSING":
+                break
+            time.sleep(1)
+            uploaded = client.files.get(name=uploaded.name)
+
+        parts = [
+            genai.types.Part.from_uri(file_uri=uploaded.uri, mime_type=content_type),
+            genai.types.Part.from_text(text=ANALYSIS_PROMPT),
+        ]
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[genai.types.Content(parts=parts)],
+            config=genai.types.GenerateContentConfig(
+                thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+        return _parse_gemini_response(response.text)
+    finally:
+        _os.unlink(tmp_path)
+
+
 async def analyze_frame(req: AnalyzeRequest) -> FrameAnalysis:
     """Download the media, send to Gemini, return structured analysis."""
+    import asyncio
 
     # 1. Download the media
     async with httpx.AsyncClient(timeout=60, follow_redirects=True) as http:
@@ -117,59 +155,20 @@ async def analyze_frame(req: AnalyzeRequest) -> FrameAnalysis:
         media_resp.headers.get("content-type", "image/jpeg"),
     )
 
-    # 2. Call Gemini with image or video
-    client = _get_gemini_client()
-
+    # 2. Run Gemini in thread pool so it doesn't block the event loop
+    loop = asyncio.get_event_loop()
     if _is_video(content_type):
-        # For videos, upload via the File API first (inline bytes not supported for video)
-        import tempfile
-
-        ext = "." + content_type.split("/")[1]  # e.g. ".mp4"
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-            tmp.write(media_bytes)
-            tmp_path = tmp.name
-
-        uploaded = client.files.upload(file=tmp_path)
-
-        # Wait for processing
-        import time
-
-        while uploaded.state.name == "PROCESSING":
-            time.sleep(1)
-            uploaded = client.files.get(name=uploaded.name)
-
-        parts = [
-            genai.types.Part.from_uri(file_uri=uploaded.uri, mime_type=content_type),
-            genai.types.Part.from_text(text=ANALYSIS_PROMPT),
-        ]
-
-        # Clean up temp file
-        import os as _os
-        _os.unlink(tmp_path)
+        data = await asyncio.wait_for(
+            loop.run_in_executor(None, _analyze_video_sync, media_bytes, content_type),
+            timeout=90,
+        )
     else:
-        parts = [
-            genai.types.Part.from_bytes(data=media_bytes, mime_type=content_type),
-            genai.types.Part.from_text(text=ANALYSIS_PROMPT),
-        ]
+        data = await asyncio.wait_for(
+            loop.run_in_executor(None, _call_gemini_sync, media_bytes, content_type),
+            timeout=15,
+        )
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=[genai.types.Content(parts=parts)],
-    )
-
-    # 3. Parse the JSON response
-    raw_text = response.text.strip()
-    # Strip markdown fences if Gemini adds them anyway
-    if raw_text.startswith("```"):
-        raw_text = raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text[3:]
-    if raw_text.endswith("```"):
-        raw_text = raw_text[:-3].strip()
-    if raw_text.startswith("json"):
-        raw_text = raw_text[4:].strip()
-
-    data = json.loads(raw_text)
-
-    # 4. Map into our schema
+    # 3. Map into our schema
     persons: list[DetectedPerson] = []
     for p in data.get("persons", []):
         bbox_raw = p.get("bbox", {})
@@ -209,29 +208,42 @@ def _parse_gemini_response(raw_text: str) -> dict:
     return json.loads(raw_text)
 
 
-async def analyze_frame_base64(req: AnalyzeFrameBase64Request) -> FrameAnalysis:
-    """Analyze a single base64-encoded frame — used for live tracking."""
-    import base64
-
-    image_bytes = base64.b64decode(req.image_base64)
-
+def _call_gemini_sync(image_bytes: bytes, mime_type: str) -> dict:
+    """Run Gemini synchronously — meant to be called from a thread pool."""
     client = _get_gemini_client()
-
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=[
             genai.types.Content(
                 parts=[
-                    genai.types.Part.from_bytes(
-                        data=image_bytes, mime_type=req.mime_type
-                    ),
+                    genai.types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                     genai.types.Part.from_text(text=ANALYSIS_PROMPT),
                 ]
             )
         ],
+        config=genai.types.GenerateContentConfig(
+            thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
+        ),
     )
+    return _parse_gemini_response(response.text)
 
-    data = _parse_gemini_response(response.text)
+
+async def analyze_frame_base64(req: AnalyzeFrameBase64Request) -> FrameAnalysis:
+    """Analyze a single base64-encoded frame — used for live tracking."""
+    import asyncio
+    import base64
+
+    image_bytes = base64.b64decode(req.image_base64)
+
+    # Run the blocking Gemini call in a thread pool with a timeout
+    loop = asyncio.get_event_loop()
+    try:
+        data = await asyncio.wait_for(
+            loop.run_in_executor(None, _call_gemini_sync, image_bytes, req.mime_type),
+            timeout=30,
+        )
+    except asyncio.TimeoutError:
+        raise RuntimeError("Gemini analysis timed out after 30s")
 
     persons: list[DetectedPerson] = []
     for p in data.get("persons", []):

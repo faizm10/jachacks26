@@ -65,7 +65,26 @@ async def analyze(req: AnalyzeRequest):
 @app.post("/analyze-frame", response_model=FrameAnalysis)
 async def analyze_frame_endpoint(req: AnalyzeFrameBase64Request):
     """Analyze a single base64-encoded frame for live tracking."""
+    import base64
+
+    # Validate the image data before sending to Gemini
     try:
-        return await analyze_frame_base64(req)
+        img_bytes = base64.b64decode(req.image_base64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+
+    if len(img_bytes) < 200:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Image too small ({len(img_bytes)} bytes) — likely a blank frame",
+        )
+
+    print(f"[analyze-frame] Received {len(img_bytes)} bytes, mime={req.mime_type}")
+
+    try:
+        result = await analyze_frame_base64(req)
+        print(f"[analyze-frame] Success: {result.peopleCount} people detected")
+        return result
     except Exception as e:
+        print(f"[analyze-frame] ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
