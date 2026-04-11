@@ -1,0 +1,11 @@
+{
+  "name": "room-intelligence",
+  "private": true,
+  "description": "Monorepo: Next.js app in frontend/, Python API in backend/",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "lint": "npm run lint --prefix frontend",
+    "start": "npm run start --prefix frontend"
+  }
+}
