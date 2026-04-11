@@ -6,7 +6,8 @@ import { useCamsAllFeeds } from "@/hooks/use-cams-all-feeds";
 import { getCamsBucketName } from "@/lib/supabase/cams-bucket";
 import type { CamsLatestObject } from "@/lib/supabase/cams-bucket";
 import { motion } from "framer-motion";
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 function StatusBadge({ status }: { status: ReturnType<typeof useCamsAllFeeds>["status"] }) {
   if (status === "ready") {
@@ -37,20 +38,97 @@ function StatusBadge({ status }: { status: ReturnType<typeof useCamsAllFeeds>["s
   );
 }
 
-function VideoTile({ obj }: { obj: CamsLatestObject }) {
+function MediaExpandModal({ obj, onClose }: { obj: CamsLatestObject; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [obj.path, onClose]);
+
+  const fileName = obj.path.split("/").pop() ?? obj.path;
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <motion.div
+      role="presentation"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" aria-hidden />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Expanded view: ${fileName}`}
+        className="relative z-10 flex max-h-[min(92vh,900px)] w-full max-w-[min(96vw,1280px)] flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-[rgba(6,8,12,0.92)] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring" as const, stiffness: 380, damping: 32 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3 sm:px-5">
+          <p className="min-w-0 truncate text-sm font-medium text-white/90">{fileName}</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white/85 transition-colors hover:bg-white/[0.1]"
+          >
+            Close
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center bg-black/50 p-3 sm:p-5">
+          {obj.kind === "video" ? (
+            <video
+              className="max-h-[min(78vh,760px)] w-full rounded-lg object-contain"
+              src={obj.url}
+              controls
+              playsInline
+              autoPlay
+              muted
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              alt={`Expanded ${fileName}`}
+              src={obj.url}
+              className="max-h-[min(78vh,760px)] w-full object-contain"
+            />
+          )}
+        </div>
+      </motion.div>
+    </motion.div>,
+    document.body,
+  );
+}
+
+function VideoTile({ obj, onExpand }: { obj: CamsLatestObject; onExpand: (o: CamsLatestObject) => void }) {
   const [errored, setErrored] = useState(false);
   const fileName = obj.path.split("/").pop() ?? obj.path;
 
   const onError = useCallback(() => setErrored(true), []);
 
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-white/[0.06] bg-black/40">
+    <button
+      type="button"
+      onClick={() => onExpand(obj)}
+      className="group relative w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/40 text-left outline-none transition-[border-color,box-shadow] hover:border-white/[0.14] hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-white/25"
+    >
       <div className="aspect-video w-full">
         {!errored ? (
           obj.kind === "video" ? (
             <video
               key={obj.url}
-              className="h-full w-full object-cover"
+              className="pointer-events-none h-full w-full object-cover"
               src={obj.url}
               autoPlay
               muted
@@ -64,7 +142,7 @@ function VideoTile({ obj }: { obj: CamsLatestObject }) {
               key={obj.url}
               alt={`Camera frame ${obj.path}`}
               src={obj.url}
-              className="h-full w-full object-cover"
+              className="pointer-events-none h-full w-full object-cover"
               onError={onError}
             />
           )
@@ -74,17 +152,21 @@ function VideoTile({ obj }: { obj: CamsLatestObject }) {
           </div>
         )}
       </div>
-      {/* filename label */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
         <p className="truncate text-[11px] text-white/70">{fileName}</p>
+        <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-white/35 opacity-0 transition-opacity group-hover:opacity-100">
+          Click to enlarge
+        </p>
       </div>
-    </div>
+    </button>
   );
 }
 
 export function CameraFeedPanel() {
   const bucketName = getCamsBucketName();
   const { status, objects, error, refresh } = useCamsAllFeeds();
+  const [expanded, setExpanded] = useState<CamsLatestObject | null>(null);
+  const closeExpanded = useCallback(() => setExpanded(null), []);
 
   const subtitle =
     status === "ready"
@@ -137,10 +219,13 @@ export function CameraFeedPanel() {
       ) : (
         <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {objects.map((obj) => (
-            <VideoTile key={obj.path} obj={obj} />
+            <VideoTile key={obj.path} obj={obj} onExpand={setExpanded} />
           ))}
         </div>
       )}
+      {expanded ? (
+        <MediaExpandModal key={expanded.path} obj={expanded} onClose={closeExpanded} />
+      ) : null}
     </GlassPanel>
   );
 }
