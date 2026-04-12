@@ -422,13 +422,14 @@ export function ARLabelsOverlay({
     if (!hasVideo || !modelReady) return;
 
     let lastCountUpdate = 0;
+    let lastVideoTime = -1;
 
     const loop = async () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const model = modelRef.current;
 
-      if (!video || !canvas || !model || video.readyState < 2 || video.paused) {
+      if (!video || !canvas || !model || video.readyState < 2) {
         rafRef.current = requestAnimationFrame(loop);
         return;
       }
@@ -439,6 +440,26 @@ export function ARLabelsOverlay({
         canvas.width = rect.width;
         canvas.height = rect.height;
       }
+
+      // Only re-detect when the video time changes (playing or scrubbed)
+      const currentTime = video.currentTime;
+      if (Math.abs(currentTime - lastVideoTime) < 0.01) {
+        // Same frame — just redraw existing tracks, skip detection
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          drawTracks(
+            ctx,
+            tracksRef.current,
+            canvas.width,
+            canvas.height,
+            geminiStatus.current,
+            highlightIdRef.current,
+          );
+        }
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+      lastVideoTime = currentTime;
 
       try {
         const preds = await model.detect(video);
@@ -702,18 +723,19 @@ export function ARLabelsOverlay({
               autoPlay
               muted
               playsInline
-              loop
+              controls
               crossOrigin="anonymous"
             />
             <canvas
               ref={canvasRef}
               className="pointer-events-none absolute inset-0 h-full w-full"
+              style={{ pointerEvents: "none" }}
             />
             {/* Expand button */}
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="absolute right-3 top-3 rounded-lg border border-white/15 bg-black/60 p-1.5 text-white/60 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white/90"
+              className="absolute right-3 top-3 z-20 rounded-lg border border-white/15 bg-black/60 p-1.5 text-white/60 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white/90"
               title="Expand"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -894,7 +916,7 @@ function ExpandedARModal({
               autoPlay
               muted
               playsInline
-              loop
+              controls
               crossOrigin="anonymous"
             />
             <canvas
