@@ -33,16 +33,14 @@ export function SpatialMapWorkspace({ fallback }: { fallback: FloorPlanData }) {
               1
             </span>
             <span>
-              <strong className="font-medium text-white/85">The map canvas</strong> uses your
-              repo asset{" "}
-              <code className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[12px] text-white/70">
-                floor_plans/floorplan_transparent.png
-              </code>{" "}
-              (served as{" "}
+              <strong className="font-medium text-white/85">The 3D map</strong> is an interactive
+              John Abbott College Library model (orbit, zoom, room picks). When you analyze a clip, the
+              same homography overlay is shown on the <strong className="text-white/85">3D ground slab</strong>, using{" "}
               <code className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[12px] text-white/70">
                 /floorplans/floorplan_transparent.png
-              </code>
-              ) — not the camera picture — so you read the real layout first.
+              </code>{" "}
+              plus the API heat PNG. Extruded rooms are illustrative; the heat is aligned to the floor
+              image footprint, not per-room geometry.
             </span>
           </li>
           <li className="flex gap-3">
@@ -64,7 +62,7 @@ export function SpatialMapWorkspace({ fallback }: { fallback: FloorPlanData }) {
               <code className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[12px] text-white/70">
                 POST /floorplan/analyze
               </code>
-              ) returns a heat grid + zones in 0–100% space; we <strong className="text-white/85">draw them on top of the floor plan</strong>.
+              ) returns a heat grid + zones in 0–100% space; we <strong className="text-white/85">draw them on the 2D schematic preview</strong> under the 3D view.
               For <strong className="text-white/85">IMG_5530.mp4</strong>, the API can{" "}
               <strong className="text-white/85">warp video motion into the corridor band</strong> on the
               PNG (tunable via{" "}
@@ -99,7 +97,7 @@ export function SpatialMapWorkspace({ fallback }: { fallback: FloorPlanData }) {
           className="min-h-[320px] lg:col-span-6"
         >
           <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">
-            Floor plan + heat
+            3D library + motion
           </p>
           <InteractiveFloorPlanPanel fallback={fallback} />
         </motion.div>

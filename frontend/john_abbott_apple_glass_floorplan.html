@@ -1,0 +1,286 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f5f5f7}
+#wrap{background:#f5f5f7;padding:20px 0;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif}
+.floor-bar{display:flex;gap:2px;margin-bottom:18px;background:rgba(0,0,0,0.06);border-radius:10px;padding:3px;width:fit-content}
+.fb{font-size:12px;font-weight:400;padding:5px 18px;border-radius:8px;cursor:pointer;border:none;background:transparent;color:rgba(0,0,0,0.45);letter-spacing:0.01em;transition:all 0.18s}
+.fb.on{background:#fff;color:rgba(0,0,0,0.85);font-weight:500;box-shadow:0 1px 4px rgba(0,0,0,0.12)}
+.canvas-wrap{border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 2px 20px rgba(0,0,0,0.07)}
+canvas{display:block;width:100%}
+.detail{margin-top:14px;padding:14px 18px;border-radius:12px;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,0.06);min-height:52px}
+.dn{font-size:13px;font-weight:500;color:rgba(0,0,0,0.85);letter-spacing:-.01em;margin-bottom:2px}
+.dd{font-size:11px;color:rgba(0,0,0,0.4);letter-spacing:0.01em}
+.legend-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.lg{display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(0,0,0,0.4);letter-spacing:0.02em;text-transform:uppercase;font-weight:500}
+.lc{width:8px;height:8px;border-radius:2px}
+</style>
+
+<div id="wrap">
+<h2 style="position:absolute;width:1px;height:1px;overflow:hidden">John Abbott College Library — Apple-style glass floor plan</h2>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+  <div class="floor-bar">
+    <button class="fb on" onclick="go('f1')" id="bf1">1st floor</button>
+    <button class="fb" onclick="go('bs')" id="bbs">Basement</button>
+  </div>
+  <div class="legend-row" style="margin:0">
+    <div class="lg"><div class="lc" style="background:rgba(0,0,0,0.05);border:1px solid rgba(0,0,0,0.1)"></div>Open</div>
+    <div class="lg"><div class="lc" style="background:rgba(0,120,255,0.08);border:1px solid rgba(0,120,255,0.18)"></div>Study</div>
+    <div class="lg"><div class="lc" style="background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.07)"></div>Corridor</div>
+    <div class="lg"><div class="lc" style="background:rgba(52,199,89,0.12);border:1px solid rgba(52,199,89,0.25)"></div>Exit</div>
+  </div>
+</div>
+
+<div class="canvas-wrap">
+  <canvas id="cv"></canvas>
+</div>
+
+<div class="detail">
+  <div class="dn" id="dn">Select a room</div>
+  <div class="dd" id="dd">John Abbott College Library · 21 275 Lakeshore Rd, Sainte-Anne-de-Bellevue</div>
+</div>
+</div>
+
+<script>
+const DPR=window.devicePixelRatio||1;
+const cv=document.getElementById('cv');
+let ctx,W,H;
+let cur='f1';
+let hov=null;
+let rooms=[];
+
+const TYPES={
+  open:  {top:'rgba(0,0,0,0.03)',   side:'rgba(0,0,0,0.07)',  front:'rgba(0,0,0,0.05)',  stroke:'rgba(0,0,0,0.08)'},
+  study: {top:'rgba(0,120,255,0.06)',side:'rgba(0,120,255,0.09)',front:'rgba(0,120,255,0.07)',stroke:'rgba(0,120,255,0.15)'},
+  hall:  {top:'rgba(0,0,0,0.02)',   side:'rgba(0,0,0,0.05)',  front:'rgba(0,0,0,0.03)',  stroke:'rgba(0,0,0,0.05)'},
+  exit:  {top:'rgba(52,199,89,0.1)',side:'rgba(52,199,89,0.14)',front:'rgba(52,199,89,0.12)',stroke:'rgba(52,199,89,0.22)'},
+  evac:  {top:'rgba(52,199,89,0.08)',side:'rgba(52,199,89,0.11)',front:'rgba(52,199,89,0.09)',stroke:'rgba(52,199,89,0.18)'},
+  service:{top:'rgba(255,159,10,0.06)',side:'rgba(255,159,10,0.1)',front:'rgba(255,159,10,0.08)',stroke:'rgba(255,159,10,0.15)'},
+};
+
+const FLOORS={
+f1:{
+  sw:760,sh:420,
+  rooms:[
+    {id:'101B', label:'101B', type:'open',   note:'Large open library — main reading floor and stacks',x:0,y:0,w:310,h:40},
+    {id:'101',  label:'101',  type:'open',   note:'Main open library floor — reading tables',x:0,y:40,w:220,h:180},
+    {id:'101A', label:'101A', type:'open',   note:'Open library sub-section — south west',x:0,y:220,w:100,h:80},
+    {id:'101C', label:'101C', type:'open',   note:'Study carrels and open reading area',x:100,y:220,w:100,h:80},
+    {id:'101D', label:'101D', type:'hall',   note:'Central corridor — links west and east wings',x:220,y:80,w:110,h:140},
+    {id:'102',  label:'102',  type:'study',  note:'Room 102 — staff and admin offices, north',x:310,y:0,w:130,h:80},
+    {id:'103',  label:'103',  type:'study',  note:'Room 103 — group study room',x:100,y:300,w:120,h:80},
+    {id:'104',  label:'104',  type:'service',note:'Room 104 — central service and help desk',x:330,y:80,w:90,h:80},
+    {id:'105',  label:'105',  type:'hall',   note:'Room 105 — stairwell near Exit 3',x:220,y:300,w:80,h:80},
+    {id:'106',  label:'106',  type:'study',  note:'Room 106 — staff area adjacent to Exit 2',x:310,y:0,w:90,h:80},
+    {id:'110',  label:'110',  type:'hall',   note:'Room 110 — corridor to east wing',x:420,y:80,w:80,h:80},
+    {id:'111',  label:'111',  type:'hall',   note:'Room 111 — elevator lobby · do not use in fire',x:420,y:160,w:80,h:100},
+    {id:'112',  label:'112',  type:'study',  note:'Room 112 — study room, east wing',x:500,y:0,w:80,h:80},
+    {id:'113',  label:'113',  type:'exit',   note:'Room 113 — fire hose and pull station',x:300,y:300,w:60,h:80},
+    {id:'114',  label:'114',  type:'study',  note:'Room 114 — study room, east wing',x:580,y:0,w:80,h:80},
+    {id:'115',  label:'115',  type:'hall',   note:'Room 115 — washrooms and corridor',x:420,y:260,w:80,h:80},
+    {id:'116',  label:'116',  type:'study',  note:'Room 116 — study room, far east',x:660,y:0,w:100,h:80},
+    {id:'117',  label:'117',  type:'hall',   note:'Room 117 — storage and utility',x:420,y:340,w:60,h:60},
+    {id:'118',  label:'118',  type:'study',  note:'Room 118 — study room, east lower',x:660,y:80,w:100,h:80},
+    {id:'119',  label:'119',  type:'open',   note:'Room 119 — large open east area',x:500,y:80,w:260,h:200},
+    {id:'120',  label:'120',  type:'study',  note:'Room 120 — study room, east mid',x:580,y:0,w:80,h:80},
+    {id:'122',  label:'122',  type:'study',  note:'Room 122 — study room, east mid',x:500,y:0,w:80,h:80},
+  ],
+  exits:[
+    {label:'EXIT 1',x:0,y:160},{label:'EXIT 2',x:390,y:0},
+    {label:'EXIT 3',x:220,y:390},{label:'EXIT 4',x:760,y:80},
+  ]
+},
+bs:{
+  sw:760,sh:450,
+  rooms:[
+    {id:'002',label:'002',type:'open',  note:'Room 002 — open reading and lounge area',x:80,y:0,w:200,h:120},
+    {id:'003',label:'003',type:'hall',  note:'Room 003 — west utility and storage',x:0,y:0,w:80,h:260},
+    {id:'001',label:'001',type:'open',  note:'Room 001 — central open study area',x:80,y:120,w:180,h:120},
+    {id:'004',label:'004',type:'service',note:'Room 004 — You Are Here · central foyer',x:260,y:120,w:130,h:80},
+    {id:'005',label:'005',type:'exit',  note:'Room 005 — Exit 3 stairwell · evacuation route',x:280,y:280,w:80,h:80},
+    {id:'008',label:'008',type:'exit',  note:'Room 008 — corridor to Exit 2 stairwell',x:390,y:0,w:80,h:120},
+    {id:'010',label:'010',type:'hall',  note:'Room 010 — corridor · first aid kit location',x:390,y:120,w:80,h:80},
+    {id:'011',label:'011',type:'hall',  note:'Room 011 — elevator lobby · do not use in fire',x:470,y:240,w:80,h:80},
+    {id:'013',label:'013',type:'evac',  note:'Room 013 — evacuation corridor to Exit 3',x:330,y:200,w:80,h:160},
+    {id:'014',label:'014',type:'study', note:'Room 014 — study room, east',x:530,y:120,w:90,h:80},
+    {id:'015',label:'015',type:'hall',  note:'Room 015 — elevator area · do not use in fire',x:470,y:160,w:80,h:80},
+    {id:'016',label:'016',type:'study', note:'Room 016 — study room, upper east',x:530,y:0,w:100,h:80},
+    {id:'017',label:'017',type:'hall',  note:'Room 017 — washrooms and utility, east',x:470,y:320,w:80,h:80},
+    {id:'018',label:'018',type:'study', note:'Room 018 — admin and study office',x:470,y:80,w:80,h:80},
+    {id:'020',label:'020',type:'study', note:'Room 020 — study area, north east',x:630,y:0,w:90,h:80},
+    {id:'021',label:'021',type:'open',  note:'Room 021 — open east area',x:620,y:120,w:80,h:80},
+    {id:'023',label:'023',type:'study', note:'Room 023 — study room, east',x:620,y:280,w:80,h:80},
+    {id:'024',label:'024',type:'study', note:'Room 024 — computer lab and large study',x:720,y:0,w:80,h:160},
+    {id:'025',label:'025',type:'study', note:'Room 025 — group study, far east',x:700,y:280,w:80,h:80},
+    {id:'030',label:'030',type:'hall',  note:'Room 030 — far east storage room',x:700,y:160,w:80,h:120},
+  ],
+  exits:[
+    {label:'EXIT 1',x:0,y:120},{label:'EXIT 2',x:420,y:0},
+    {label:'EXIT 3',x:280,y:360},{label:'EXIT 4',x:760,y:80},
+  ]
+}};
+
+const WH=18;
+const SCALE=0.92;
+
+function iso(x,y){return{x:(x-y)*0.68,y:(x+y)*0.34}}
+
+function initCanvas(){
+  const fl=FLOORS[cur];
+  const cw=cv.parentElement.clientWidth||700;
+  const p=iso(fl.sw,fl.sh);
+  const aspect=(Math.abs(p.x)+120)/(p.y+WH+60);
+  H=Math.round(cw/aspect);
+  W=cw;
+  cv.width=W*DPR; cv.height=H*DPR;
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  ctx=cv.getContext('2d');
+  ctx.scale(DPR,DPR);
+}
+
+function getOX(fl){
+  const p0=iso(0,0), pE=iso(fl.sw,0), pS=iso(0,fl.sh);
+  const minX=Math.min(p0.x,pE.x,pS.x);
+  const maxX=Math.max(p0.x,pE.x,pS.x);
+  return (W-(maxX-minX))/2 - minX;
+}
+function getOY(){return WH+30}
+
+let OX=0,OY=0;
+
+function tp(x,y,z=0){
+  const p=iso(x*SCALE,y*SCALE);
+  return[p.x+OX, p.y+OY-z];
+}
+
+function drawRoom(r,isHov){
+  const x1=r.x,y1=r.y,x2=r.x+r.w,y2=r.y+r.h;
+  const c=TYPES[r.type];
+  const [tl,tr,br,bl]=[tp(x1,y1,WH),tp(x2,y1,WH),tp(x2,y2,WH),tp(x1,y2,WH)];
+  const [bl0,tl0,tr0,br0]=[tp(x1,y2,0),tp(x1,y1,0),tp(x2,y1,0),tp(x2,y2,0)];
+
+  const alpha=isHov?1.7:1;
+
+  function poly(pts,fill){
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
+    ctx.closePath();
+    ctx.fillStyle=fill;
+    ctx.fill();
+  }
+  function polyStroke(pts,stroke,lw=0.5){
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
+    ctx.closePath();
+    ctx.strokeStyle=stroke;
+    ctx.lineWidth=lw;
+    ctx.stroke();
+  }
+
+  const sideAlpha=isHov?'rgba(0,0,0,0.1)':c.side;
+  const frontAlpha=isHov?'rgba(0,0,0,0.07)':c.front;
+  const topAlpha=isHov?'rgba(255,255,255,0.95)':c.top;
+
+  poly([bl0,tl0,tl,bl],sideAlpha);
+  polyStroke([bl0,tl0,tl,bl],c.stroke,0.4);
+
+  poly([tr0,br0,br,tr],frontAlpha);
+  polyStroke([tr0,br0,br,tr],c.stroke,0.4);
+
+  poly([tl,tr,br,bl],topAlpha);
+  polyStroke([tl,tr,br,bl],isHov?'rgba(0,0,0,0.18)':c.stroke, isHov?0.8:0.5);
+
+  const cx=(tl[0]+br[0])/2;
+  const cy=(tl[1]+br[1])/2;
+  ctx.font=`${isHov?'500':'300'} ${r.w>60?'8.5':'7.5'}px -apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif`;
+  ctx.fillStyle=isHov?'rgba(0,0,0,0.7)':'rgba(0,0,0,0.3)';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(r.id,cx,cy);
+
+  r._poly=[tl,tr,br,bl];
+}
+
+function drawExit(e){
+  const[x,y]=tp(e.x,e.y,0);
+  ctx.beginPath();
+  ctx.roundRect(x-18,y-8,36,14,5);
+  ctx.fillStyle='rgba(52,199,89,0.15)';
+  ctx.fill();
+  ctx.strokeStyle='rgba(52,199,89,0.35)';
+  ctx.lineWidth=0.5;
+  ctx.stroke();
+  ctx.font='500 7px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.fillStyle='rgba(52,199,89,0.9)';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(e.label,x,y);
+}
+
+function ptInPoly(px,py,poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+    if(((yi>py)!=(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+function draw(){
+  const fl=FLOORS[cur];
+  initCanvas();
+  OX=getOX(fl); OY=getOY();
+  rooms=[...fl.rooms];
+  ctx.clearRect(0,0,W,H);
+
+  ctx.fillStyle='#fff';
+  ctx.fillRect(0,0,W,H);
+
+  const sorted=[...rooms].sort((a,b)=>(a.x+a.y)-(b.x+b.y));
+  sorted.forEach(r=>drawRoom(r,r===hov));
+  fl.exits.forEach(e=>drawExit(e));
+}
+
+function go(f){
+  cur=f; hov=null;
+  document.getElementById('bf1').classList.toggle('on',f==='f1');
+  document.getElementById('bbs').classList.toggle('on',f==='bs');
+  document.getElementById('dn').textContent='Select a room';
+  document.getElementById('dd').textContent='John Abbott College Library · 21 275 Lakeshore Rd, Sainte-Anne-de-Bellevue';
+  draw();
+}
+
+cv.addEventListener('mousemove',e=>{
+  const r=cv.getBoundingClientRect();
+  const mx=(e.clientX-r.left), my=(e.clientY-r.top);
+  const prev=hov;
+  hov=null;
+  const sorted=[...rooms].sort((a,b)=>(b.x+b.y)-(a.x+a.y));
+  for(const rm of sorted){
+    if(rm._poly&&ptInPoly(mx,my,rm._poly)){hov=rm;break;}
+  }
+  if(hov!==prev) draw();
+  cv.style.cursor=hov?'pointer':'default';
+});
+
+cv.addEventListener('click',e=>{
+  const r=cv.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  const sorted=[...rooms].sort((a,b)=>(b.x+b.y)-(a.x+a.y));
+  for(const rm of sorted){
+    if(rm._poly&&ptInPoly(mx,my,rm._poly)){
+      document.getElementById('dn').textContent=rm.label;
+      document.getElementById('dd').textContent=rm.note;
+      break;
+    }
+  }
+});
+
+cv.addEventListener('mouseleave',()=>{hov=null;draw();cv.style.cursor='default'});
+window.addEventListener('resize',()=>{hov=null;draw()});
+draw();
+</script>

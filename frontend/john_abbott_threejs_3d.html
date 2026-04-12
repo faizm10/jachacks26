@@ -1,0 +1,270 @@
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+#wrap{background:#f5f5f7;padding:16px 0;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif}
+#c{width:100%;display:block;border-radius:16px;overflow:hidden;cursor:grab}
+#c:active{cursor:grabbing}
+.bar{display:flex;gap:2px;background:rgba(0,0,0,0.06);border-radius:10px;padding:3px;width:fit-content;margin-bottom:14px}
+.fb{font-size:12px;font-weight:400;padding:5px 18px;border-radius:8px;cursor:pointer;border:none;background:transparent;color:rgba(0,0,0,0.4);transition:all 0.15s}
+.fb.on{background:#fff;color:rgba(0,0,0,0.8);font-weight:500;box-shadow:0 1px 4px rgba(0,0,0,0.1)}
+.hint{font-size:10px;color:rgba(0,0,0,0.3);letter-spacing:0.02em;margin-bottom:10px}
+.info{margin-top:12px;padding:12px 16px;border-radius:12px;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,0.06);min-height:48px}
+.in{font-size:13px;font-weight:500;color:rgba(0,0,0,0.8);margin-bottom:2px}
+.id{font-size:11px;color:rgba(0,0,0,0.38);letter-spacing:0.01em}
+</style>
+
+<div id="wrap">
+<h2 style="position:absolute;width:1px;height:1px;overflow:hidden">John Abbott Library — Three.js 3D floor plan</h2>
+<div class="bar">
+  <button class="fb on" onclick="switchFloor('f1')" id="bf1">1st floor</button>
+  <button class="fb" onclick="switchFloor('bs')" id="bbs">Basement</button>
+</div>
+<div class="hint">Drag to orbit &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Click a room</div>
+<canvas id="c"></canvas>
+<div class="info"><div class="in" id="in">Select a room</div><div class="id" id="id">John Abbott College Library · Sainte-Anne-de-Bellevue</div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const FLOORS={
+f1:{
+  rooms:[
+    {id:'101B',type:'open',   note:'Main open library — reading floor and stacks',         x:0,  z:0,  w:310,d:40,  h:2.2},
+    {id:'101', type:'open',   note:'Main open library floor — reading tables',              x:0,  z:40, w:220,d:180, h:2.2},
+    {id:'101A',type:'open',   note:'Open library sub-section — south west',                x:0,  z:220,w:100,d:80,  h:2.2},
+    {id:'101C',type:'open',   note:'Study carrels and open reading area',                  x:100,z:220,w:100,d:80,  h:2.2},
+    {id:'101D',type:'hall',   note:'Central corridor — links west and east wings',         x:220,z:80, w:110,d:140, h:2.2},
+    {id:'102', type:'study',  note:'Room 102 — staff and admin offices',                   x:310,z:0,  w:130,d:80,  h:2.8},
+    {id:'103', type:'study',  note:'Room 103 — group study room',                          x:100,z:300,w:120,d:80,  h:2.8},
+    {id:'104', type:'service',note:'Room 104 — central service and help desk',             x:330,z:80, w:90, d:80,  h:2.8},
+    {id:'105', type:'hall',   note:'Room 105 — stairwell near Exit 3',                     x:220,z:300,w:80, d:80,  h:2.2},
+    {id:'110', type:'hall',   note:'Room 110 — corridor to east wing',                     x:420,z:80, w:80, d:80,  h:2.2},
+    {id:'111', type:'hall',   note:'Room 111 — elevator lobby (do not use in fire)',       x:420,z:160,w:80, d:100, h:2.2},
+    {id:'112', type:'study',  note:'Room 112 — study room, east wing',                     x:500,z:0,  w:80, d:80,  h:2.8},
+    {id:'113', type:'exit',   note:'Room 113 — fire hose and pull station',                x:300,z:300,w:60, d:80,  h:2.2},
+    {id:'114', type:'study',  note:'Room 114 — study room, east wing',                     x:580,z:0,  w:80, d:80,  h:2.8},
+    {id:'115', type:'hall',   note:'Room 115 — washrooms and corridor',                    x:420,z:260,w:80, d:80,  h:2.2},
+    {id:'116', type:'study',  note:'Room 116 — study room, far east',                      x:660,z:0,  w:100,d:80,  h:2.8},
+    {id:'118', type:'study',  note:'Room 118 — study room, east lower',                    x:660,z:80, w:100,d:80,  h:2.8},
+    {id:'119', type:'open',   note:'Room 119 — large open east area',                      x:500,z:80, w:260,d:200, h:2.2},
+    {id:'120', type:'study',  note:'Room 120 — study room, east mid',                      x:580,z:0,  w:80, d:80,  h:2.8},
+    {id:'122', type:'study',  note:'Room 122 — study room, east mid',                      x:500,z:0,  w:80, d:80,  h:2.8},
+    {id:'EXIT 1',type:'exit', note:'Emergency exit — west end',                            x:-10,z:140,w:10, d:40,  h:2.2},
+    {id:'EXIT 2',type:'exit', note:'Emergency exit — north centre',                        x:370,z:-10,w:40, d:10,  h:2.2},
+    {id:'EXIT 3',type:'exit', note:'Emergency exit — south centre',                        x:220,z:390,w:80, d:10,  h:2.2},
+    {id:'EXIT 4',type:'exit', note:'Emergency exit — east end',                            x:760,z:60, w:10, d:40,  h:2.2},
+  ]
+},
+bs:{
+  rooms:[
+    {id:'002', type:'open',   note:'Room 002 — open reading and lounge area',              x:80, z:0,  w:200,d:120, h:2.4},
+    {id:'003', type:'hall',   note:'Room 003 — west utility and storage',                  x:0,  z:0,  w:80, d:260, h:2.4},
+    {id:'001', type:'open',   note:'Room 001 — central open study area',                   x:80, z:120,w:180,d:120, h:2.4},
+    {id:'004', type:'service',note:'Room 004 — You Are Here · central foyer',              x:260,z:120,w:130,d:80,  h:2.4},
+    {id:'005', type:'exit',   note:'Room 005 — Exit 3 stairwell · evacuation route',       x:280,z:280,w:80, d:80,  h:2.4},
+    {id:'008', type:'exit',   note:'Room 008 — corridor to Exit 2 stairwell',              x:390,z:0,  w:80, d:120, h:2.4},
+    {id:'010', type:'hall',   note:'Room 010 — corridor · first aid kit location',         x:390,z:120,w:80, d:80,  h:2.4},
+    {id:'011', type:'hall',   note:'Room 011 — elevator lobby (do not use in fire)',       x:470,z:240,w:80, d:80,  h:2.4},
+    {id:'013', type:'evac',   note:'Room 013 — evacuation corridor to Exit 3',             x:330,z:200,w:80, d:160, h:2.4},
+    {id:'014', type:'study',  note:'Room 014 — study room, east',                          x:530,z:120,w:90, d:80,  h:2.8},
+    {id:'015', type:'hall',   note:'Room 015 — elevator area (do not use in fire)',        x:470,z:160,w:80, d:80,  h:2.4},
+    {id:'016', type:'study',  note:'Room 016 — study room, upper east',                    x:530,z:0,  w:100,d:80,  h:2.8},
+    {id:'017', type:'hall',   note:'Room 017 — washrooms and utility, east',               x:470,z:320,w:80, d:80,  h:2.4},
+    {id:'018', type:'study',  note:'Room 018 — admin and study office',                    x:470,z:80, w:80, d:80,  h:2.8},
+    {id:'020', type:'study',  note:'Room 020 — study area, north east',                    x:630,z:0,  w:90, d:80,  h:2.8},
+    {id:'021', type:'open',   note:'Room 021 — open east area',                            x:620,z:120,w:80, d:80,  h:2.4},
+    {id:'023', type:'study',  note:'Room 023 — study room, east',                          x:620,z:280,w:80, d:80,  h:2.8},
+    {id:'024', type:'study',  note:'Room 024 — computer lab and large study',              x:720,z:0,  w:80, d:160, h:2.8},
+    {id:'025', type:'study',  note:'Room 025 — group study, far east',                     x:700,z:280,w:80, d:80,  h:2.8},
+    {id:'030', type:'hall',   note:'Room 030 — far east storage room',                     x:700,z:160,w:80, d:120, h:2.4},
+    {id:'EXIT 1',type:'exit', note:'Emergency exit — west end',                            x:-10,z:100,w:10, d:40,  h:2.4},
+    {id:'EXIT 2',type:'exit', note:'Emergency exit — north centre',                        x:400,z:-10,w:40, d:10,  h:2.4},
+    {id:'EXIT 3',type:'exit', note:'Emergency exit — south (via 005)',                     x:280,z:360,w:80, d:10,  h:2.4},
+    {id:'EXIT 4',type:'exit', note:'Emergency exit — east end',                            x:760,z:60, w:10, d:40,  h:2.4},
+  ]
+}
+};
+
+const MATS={
+  open:   {color:0xfafafa, opacity:0.92, edge:0xd0d0d0},
+  study:  {color:0xf0f6ff, opacity:0.94, edge:0xb8d0f0},
+  hall:   {color:0xf8f8f8, opacity:0.88, edge:0xe0e0e0},
+  exit:   {color:0xf0fff4, opacity:0.93, edge:0x90e0a8},
+  evac:   {color:0xf0fff4, opacity:0.93, edge:0x90e0a8},
+  service:{color:0xfffbf0, opacity:0.93, edge:0xe8d090},
+};
+
+let scene,camera,renderer,raycaster,mouse,meshes=[],edgeMeshes=[];
+let isDrag=false,prevMouse={x:0,y:0};
+let spherical={theta:0.6,phi:1.0,radius:400};
+let curFloor='f1';
+let animId;
+let target=new THREE.Vector3(380,0,180);
+
+function initScene(){
+  const wrap=document.getElementById('wrap');
+  const W=wrap.clientWidth||700;
+  const H=Math.round(W*0.56);
+  document.getElementById('c').style.height=H+'px';
+
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0xffffff);
+
+  camera=new THREE.PerspectiveCamera(38,W/H,1,5000);
+  updateCamera();
+
+  renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,alpha:false});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(W,H);
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+  const amb=new THREE.AmbientLight(0xffffff,0.75);
+  scene.add(amb);
+
+  const sun=new THREE.DirectionalLight(0xffffff,0.9);
+  sun.position.set(300,500,-200);
+  sun.castShadow=true;
+  sun.shadow.mapSize.set(2048,2048);
+  sun.shadow.camera.near=1;
+  sun.shadow.camera.far=2000;
+  sun.shadow.camera.left=-600;
+  sun.shadow.camera.right=600;
+  sun.shadow.camera.top=600;
+  sun.shadow.camera.bottom=-600;
+  scene.add(sun);
+
+  const fill=new THREE.DirectionalLight(0xe8f0ff,0.4);
+  fill.position.set(-200,200,300);
+  scene.add(fill);
+
+  const floor=new THREE.Mesh(
+    new THREE.PlaneGeometry(1200,800),
+    new THREE.MeshLambertMaterial({color:0xf5f5f7})
+  );
+  floor.rotation.x=-Math.PI/2;
+  floor.position.set(380,0,200);
+  floor.receiveShadow=true;
+  scene.add(floor);
+
+  raycaster=new THREE.Raycaster();
+  mouse=new THREE.Vector2();
+  buildFloor(curFloor);
+  addEvents();
+  animate();
+}
+
+function buildFloor(flKey){
+  meshes.forEach(m=>scene.remove(m));
+  edgeMeshes.forEach(m=>scene.remove(m));
+  meshes=[];edgeMeshes=[];
+
+  const scale=0.9;
+  FLOORS[flKey].rooms.forEach(r=>{
+    const mat=MATS[r.type];
+    const geo=new THREE.BoxGeometry(r.w*scale, r.h*10, r.d*scale);
+    const mesh=new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
+      color:mat.color, transparent:true, opacity:mat.opacity
+    }));
+    mesh.position.set(
+      r.x*scale + r.w*scale/2,
+      r.h*5,
+      r.z*scale + r.d*scale/2
+    );
+    mesh.castShadow=true;
+    mesh.receiveShadow=true;
+    mesh.userData={id:r.id,note:r.note,baseColor:mat.color};
+    scene.add(mesh);
+    meshes.push(mesh);
+
+    const edges=new THREE.EdgesGeometry(geo);
+    const lineMat=new THREE.LineBasicMaterial({color:mat.edge,linewidth:1,transparent:true,opacity:0.6});
+    const line=new THREE.LineSegments(edges,lineMat);
+    line.position.copy(mesh.position);
+    scene.add(line);
+    edgeMeshes.push(line);
+  });
+}
+
+function updateCamera(){
+  const x=target.x+spherical.radius*Math.sin(spherical.phi)*Math.sin(spherical.theta);
+  const y=spherical.radius*Math.cos(spherical.phi);
+  const z=target.z+spherical.radius*Math.sin(spherical.phi)*Math.cos(spherical.theta);
+  camera.position.set(x,y,z);
+  camera.lookAt(target);
+}
+
+function animate(){
+  animId=requestAnimationFrame(animate);
+  renderer.render(scene,camera);
+}
+
+let hovMesh=null;
+function addEvents(){
+  const c=document.getElementById('c');
+  c.addEventListener('mousedown',e=>{isDrag=false;prevMouse={x:e.clientX,y:e.clientY}});
+  c.addEventListener('mousemove',e=>{
+    const dx=e.clientX-prevMouse.x, dy=e.clientY-prevMouse.y;
+    if(e.buttons===1){
+      isDrag=true;
+      spherical.theta-=dx*0.008;
+      spherical.phi=Math.max(0.2,Math.min(1.4,spherical.phi+dy*0.008));
+      updateCamera();
+    }
+    prevMouse={x:e.clientX,y:e.clientY};
+    const rect=c.getBoundingClientRect();
+    mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+    mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+    raycaster.setFromCamera(mouse,camera);
+    const hits=raycaster.intersectObjects(meshes);
+    if(hovMesh){hovMesh.material.color.setHex(hovMesh.userData.baseColor);hovMesh=null;}
+    if(hits.length){
+      hovMesh=hits[0].object;
+      hovMesh.material.color.setHex(0xe8f0ff);
+    }
+  });
+  c.addEventListener('click',e=>{
+    if(isDrag)return;
+    raycaster.setFromCamera(mouse,camera);
+    const hits=raycaster.intersectObjects(meshes);
+    if(hits.length){
+      const d=hits[0].object.userData;
+      document.getElementById('in').textContent=d.id;
+      document.getElementById('id').textContent=d.note;
+    }
+  });
+  c.addEventListener('wheel',e=>{
+    e.preventDefault();
+    spherical.radius=Math.max(100,Math.min(900,spherical.radius+e.deltaY*0.5));
+    updateCamera();
+  },{passive:false});
+  c.addEventListener('touchstart',e=>{prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});
+  c.addEventListener('touchmove',e=>{
+    const dx=e.touches[0].clientX-prevMouse.x, dy=e.touches[0].clientY-prevMouse.y;
+    spherical.theta-=dx*0.008;
+    spherical.phi=Math.max(0.2,Math.min(1.4,spherical.phi+dy*0.008));
+    updateCamera();
+    prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};
+  },{passive:true});
+}
+
+function switchFloor(f){
+  curFloor=f;
+  document.getElementById('bf1').classList.toggle('on',f==='f1');
+  document.getElementById('bbs').classList.toggle('on',f==='bs');
+  document.getElementById('in').textContent='Select a room';
+  document.getElementById('id').textContent='John Abbott College Library · Sainte-Anne-de-Bellevue';
+  buildFloor(f);
+}
+
+window.switchFloor=switchFloor;
+initScene();
+window.addEventListener('resize',()=>{
+  const W=document.getElementById('wrap').clientWidth||700;
+  const H=Math.round(W*0.56);
+  document.getElementById('c').style.height=H+'px';
+  renderer.setSize(W,H);
+  camera.aspect=W/H;
+  camera.updateProjectionMatrix();
+});
+</script>
