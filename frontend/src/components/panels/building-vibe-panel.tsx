@@ -2,7 +2,9 @@
 
 import type { RoomStats, RoomInsight } from "@/lib/types/room";
 import type { LivePersonBar } from "@/lib/spatial/john-abbott-hex-heatmap";
+import { ARLabelsOverlay } from "@/components/panels/ar-labels-overlay";
 import { GlassPanel } from "@/components/ui/glass-panel";
+import { useLiveAnalysis } from "@/hooks/use-live-analysis";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState, useCallback, useMemo } from "react";
 
@@ -30,6 +32,7 @@ interface RoomVibeData {
   breakdown: { kind: VibeKind; pct: number }[];
   activities: string[];
   isLive: boolean;
+  videoUrl?: string;
 }
 
 /* ── Activity → vibe mapping (same as hex heatmap) ── */
@@ -87,7 +90,6 @@ function estimateNoise(people: number, dominant: VibeKind): number {
 const ROOM_NAMES: Record<string, { name: string; floor: string }> = {
   "101":  { name: "Main Reading Hall", floor: "1st floor" },
   "101B": { name: "Reading Floor & Stacks", floor: "1st floor" },
-  "101D": { name: "Central Corridor", floor: "1st floor" },
   "001":  { name: "Open Study Core", floor: "Basement" },
 };
 
@@ -113,8 +115,14 @@ function buildLiveRoomData(roomId: string, persons: LivePersonBar[]): RoomVibeDa
   const noise = estimateNoise(people, dominant);
   const { vibe, reason } = vibeFromBreakdown(people, dominant, breakdown);
 
-  // Unique activity strings
-  const activities = [...new Set(persons.map((p) => p.activity))];
+  // Activity strings with person counts
+  const activityCounts = new Map<string, number>();
+  for (const p of persons) {
+    activityCounts.set(p.activity, (activityCounts.get(p.activity) ?? 0) + 1);
+  }
+  const activities = [...activityCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([act, count]) => count > 1 ? `${act} (${count})` : act);
 
   return {
     name: meta.name,
@@ -143,11 +151,19 @@ const FALLBACK_ROOMS: Record<string, RoomVibeData> = {
     isLive: false,
   },
   "Basement · 024": {
-    name: "East Wing — Lab & Study", floor: "Basement", people: 14, noise: 30,
-    vibe: "lab rat hours", vibeReason: "14 people glued to screens — pure productivity energy",
+    name: "East Wing — Lab & Study", floor: "Basement", people: 3, noise: 22,
+    vibe: "lab rat hours", vibeReason: "Just 3 people locked in — headphones on, zero distractions, pure grind",
     dominant: "locked-in",
-    breakdown: [{ kind: "locked-in", pct: 70 }, { kind: "collab", pct: 20 }, { kind: "social", pct: 10 }],
+    breakdown: [{ kind: "locked-in", pct: 100 }],
     activities: ["Coding assignments", "Running experiments", "Writing lab reports"],
+    isLive: false,
+  },
+  "1st floor · 101D": {
+    name: "Central Corridor", floor: "1st floor", people: 6, noise: 28,
+    vibe: "silent grind", vibeReason: "6 people heads down on laptops — nobody's talking, pure lock-in energy",
+    dominant: "locked-in",
+    breakdown: [{ kind: "locked-in", pct: 85 }, { kind: "collab", pct: 15 }],
+    activities: ["sitting and working on laptop (6)"],
     isLive: false,
   },
   "1st floor · 104": {
@@ -190,6 +206,7 @@ export function BuildingVibePanel({
   onActiveRoomChange,
   livePersons,
   clickedRoomId,
+  roomVideoUrls,
 }: {
   stats: RoomStats;
   insights: RoomInsight[];
@@ -197,6 +214,8 @@ export function BuildingVibePanel({
   livePersons?: LivePersonBar[];
   /** When user clicks a room on the 3D model */
   clickedRoomId?: string | null;
+  /** Map of room ID → video URL for showing source footage */
+  roomVideoUrls?: Record<string, string>;
 }) {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [userSelected, setUserSelected] = useState<string | null>(null);
@@ -215,15 +234,29 @@ export function BuildingVibePanel({
       const meta = ROOM_NAMES[roomId];
       if (!meta) continue;
       const key = `${meta.floor} · ${roomId}`;
-      entries[key] = buildLiveRoomData(roomId, persons);
+      const data = buildLiveRoomData(roomId, persons);
+      data.videoUrl = roomVideoUrls?.[roomId];
+      entries[key] = data;
     }
     return entries;
-  }, [livePersons]);
+  }, [livePersons, roomVideoUrls]);
 
-  // Merge live + fallback rooms
+  // Merge live + fallback rooms, injecting video URLs into fallbacks where available
   const allRooms = useMemo(() => {
-    return { ...FALLBACK_ROOMS, ...liveRoomEntries };
-  }, [liveRoomEntries]);
+    const merged = { ...FALLBACK_ROOMS, ...liveRoomEntries };
+    if (roomVideoUrls) {
+      // Inject video URLs into fallback rooms (e.g. east wing → basement-hallway-3)
+      for (const [key, data] of Object.entries(merged)) {
+        if (data.videoUrl) continue; // already has one
+        // Extract room ID from key like "Basement · 024"
+        const roomId = key.split(" · ")[1];
+        if (roomId && roomVideoUrls[roomId]) {
+          merged[key] = { ...data, videoUrl: roomVideoUrls[roomId] };
+        }
+      }
+    }
+    return merged;
+  }, [liveRoomEntries, roomVideoUrls]);
 
   const roomKeys = useMemo(() => Object.keys(allRooms), [allRooms]);
 
@@ -255,9 +288,28 @@ export function BuildingVibePanel({
   const currentKey = userSelected ?? roomKeys[carouselIndex % roomKeys.length] ?? roomKeys[0];
   const roomData = allRooms[currentKey];
 
-  // Notify parent of active room for 3D highlight
+  // Live analysis for the current room's video — keeps activity labels in sync with what's on screen
+  const { analysis: liveAnalysis } = useLiveAnalysis(roomData?.videoUrl ?? null);
+
+  // Use live-detected activities when available, fall back to cached
+  const displayActivities = useMemo(() => {
+    if (liveAnalysis?.persons && liveAnalysis.persons.length > 0) {
+      const counts = new Map<string, number>();
+      for (const p of liveAnalysis.persons) {
+        counts.set(p.activity, (counts.get(p.activity) ?? 0) + 1);
+      }
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([act, count]) => count > 1 ? `${act} (${count})` : act);
+    }
+    return roomData?.activities ?? [];
+  }, [liveAnalysis, roomData?.activities]);
+
+  // Notify parent of active room(s) for 3D highlight
+  // Some carousel entries represent multi-room regions
   useEffect(() => {
-    if (currentKey) onActiveRoomChangeStable(currentKey);
+    if (!currentKey) return;
+    onActiveRoomChangeStable(currentKey);
   }, [currentKey, onActiveRoomChangeStable]);
 
   if (!roomData) return null;
@@ -397,18 +449,42 @@ export function BuildingVibePanel({
             </div>
           </div>
 
-          {/* Activity feed */}
+          {/* Source video + detected activities */}
           <div className="mt-5 flex-1 overflow-y-auto">
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30">
               Detected activities
             </p>
-            <ul className="flex flex-col gap-1.5">
-              {roomData.activities.map((act) => (
-                <li key={act} className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-                  <p className="text-[11px] font-medium text-white/75">{act}</p>
-                </li>
-              ))}
-            </ul>
+            <div className="grid grid-cols-2 gap-3">
+              {roomData.videoUrl ? (
+                <div className="overflow-hidden rounded-lg border border-white/8">
+                  <div className="aspect-video w-full">
+                    <ARLabelsOverlay
+                      key={roomData.videoUrl}
+                      videoUrl={roomData.videoUrl}
+                      persons={[]}
+                      inline
+                      continuous
+                    />
+                  </div>
+                  <p className="bg-black/40 px-2 py-1 text-[9px] text-white/30">Source feed · AR overlay</p>
+                </div>
+              ) : (
+                <div className="flex aspect-video w-full flex-col items-center justify-center rounded-lg border border-dashed border-white/8 bg-white/2">
+                  <svg viewBox="0 0 24 24" className="mb-1.5 h-5 w-5 text-white/15" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-[9px] font-medium text-white/20">Restricted access</p>
+                  <p className="text-[8px] text-white/12">Security camera feed</p>
+                </div>
+              )}
+              <ul className="flex flex-col gap-1.5">
+                {displayActivities.map((act) => (
+                  <li key={act} className="rounded-lg border border-white/6 bg-white/2 px-3 py-2">
+                    <p className="text-[11px] font-medium text-white/75">{act}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </motion.div>
       </AnimatePresence>

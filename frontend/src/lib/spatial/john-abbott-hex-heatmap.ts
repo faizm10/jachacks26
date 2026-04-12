@@ -56,8 +56,7 @@ const ROOM_SIMS: Record<string, RoomVibeSim> = {
   "001":  { density: 0.55, vibes: { "locked-in": 0.45, social: 0.3, collab: 0.25 } },
   "002":  { density: 0.4,  vibes: { collab: 0.4, social: 0.35, "locked-in": 0.25 } },
   // East wing — lab & study (core)
-  "024":  { density: 0.45, vibes: { "locked-in": 0.7, collab: 0.2, social: 0.1 } },
-  "021":  { density: 0.3,  vibes: { social: 0.5, collab: 0.3, "locked-in": 0.2 } },
+  // 024 and 021 are handled by FIXED_BARS below
   // Foyer / service
   "004":  { density: 0.15, vibes: { transit: 0.5, social: 0.3, collab: 0.2 } },
   // Study rooms
@@ -411,6 +410,65 @@ export function appendLiveHexColumns(
   }
 }
 
+/** Exactly 3 fixed bars in the east wing lab & study area. */
+function appendFixedBars(
+  scene: THREE.Scene,
+  out: THREE.Mesh[],
+  floorKey: LibraryFloorKey,
+  yOffset: number,
+) {
+  if (floorKey !== "bs") return;
+  const rooms = JOHN_ABBOTT_3D_FLOORS.bs.rooms;
+  const room024 = rooms.find((r) => r.id === "024");
+  if (!room024) return;
+
+  const unitGeo = getHexUnitGeometry();
+  const rx = room024.x * HEATMAP_SCALE;
+  const rz = room024.z * HEATMAP_SCALE;
+  const rw = room024.w * HEATMAP_SCALE;
+  const rd = room024.d * HEATMAP_SCALE;
+  const roofY = room024.h * 5 + yOffset;
+  const palette = VIBE_PALETTE["locked-in"];
+
+  // 3 bars evenly spaced in a line across the room
+  const positions = [0.25, 0.5, 0.75];
+  const rng = mulberry32(777);
+
+  for (const t of positions) {
+    const cx = rx + t * rw;
+    const cz = rz + 0.5 * rd;
+    const h = HEX_MAX_HEIGHT * (0.55 + rng() * 0.35);
+
+    const baseColor = new THREE.Color(palette.color);
+    const hsl = { h: 0, s: 0, l: 0 };
+    baseColor.getHSL(hsl);
+    hsl.h += (rng() - 0.5) * 0.04;
+    baseColor.setHSL(hsl.h, hsl.s, hsl.l);
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: baseColor,
+      transparent: true,
+      opacity: 0.8,
+      roughness: 0.5,
+      metalness: 0.15,
+      emissive: new THREE.Color(palette.emissive),
+      emissiveIntensity: 0.7,
+    });
+
+    const mesh = new THREE.Mesh(unitGeo, mat);
+    mesh.scale.set(1, h, 1);
+    mesh.position.set(cx, roofY + h / 2, cz);
+    mesh.userData = {
+      zoneId: "locked-in",
+      baseHeight: h,
+      phaseOffset: rng() * Math.PI * 2,
+    };
+    mesh.raycast = () => {};
+    scene.add(mesh);
+    out.push(mesh);
+  }
+}
+
 /** Removes meshes and disposes materials only (shared unit geometry is not disposed). */
 export function disposeHexColumnMeshes(scene: THREE.Scene, columns: THREE.Mesh[]) {
   for (const m of columns) {
@@ -436,6 +494,9 @@ export function createJohnAbbottActivityHexes(
   if (f1YOffset !== null) {
     appendHexColumnsForFloor(scene, out, "f1", FIRST_FLOOR_ZONES, f1YOffset);
   }
+
+  // Fixed 3 bars in east wing lab
+  appendFixedBars(scene, out, "bs", bsYOffset);
 
   // Data-driven rooms from video analysis
   if (livePersons && livePersons.length > 0) {

@@ -18,7 +18,7 @@ export function FloorOverviewPanel({
   pulseRoomIds,
 }: {
   cameraRegion: CameraRegion | null;
-  highlightRoomId?: string | null;
+  highlightRoomId?: string | string[] | null;
   onRoomClick?: (roomId: string | null) => void;
   livePersons?: LivePersonBar[];
   pulseRoomIds?: string[] | null;

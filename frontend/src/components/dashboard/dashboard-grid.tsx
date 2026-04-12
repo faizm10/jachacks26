@@ -25,7 +25,49 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [clickedRoomId, setClickedRoomId] = useState<string | null>(null);
 
-  const { bars: livePersons, regions } = useLiveFloorBars({ autoAssign: true });
+  const { bars: livePersons, regions, cams } = useLiveFloorBars({ autoAssign: true });
+
+  // Map room IDs → video URLs for the vibe panel
+  const roomVideoUrls = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const r of regions) {
+      if (!r.assignedVideo || r.hardcoded) continue;
+      // Try matching by cam name first, then by assigned name containing the cam name
+      const cam = cams.find((c) => c.name === r.assignedVideo) ??
+                  cams.find((c) => r.assignedVideo!.includes(c.name) || c.name.includes(r.assignedVideo!));
+      if (cam) {
+        for (const roomId of r.roomIds) { if (roomId !== "101B") map[roomId] = cam.url; }
+      }
+    }
+    // Fallback: match known region IDs to cams (covers localStorage "(cached)" case)
+    if (cams.length > 0) {
+      const hallCam = cams.find((c) => c.name === "hall-test");
+      const basementCam = cams.find((c) => c.name === "basement-2mov");
+      for (const r of regions) {
+        if (r.hardcoded || r.status !== "done") continue;
+        if (r.id === "main-hall" && hallCam) {
+          for (const roomId of r.roomIds) { if (!map[roomId] && roomId !== "101B") map[roomId] = hallCam.url; }
+        }
+        if (r.id === "open-study" && basementCam) {
+          for (const roomId of r.roomIds) { if (!map[roomId]) map[roomId] = basementCam.url; }
+        }
+      }
+    }
+    // ── Hardcoded video mappings ──
+    // Room ID → cam filename (edit here to change which video shows for each room)
+    const ROOM_VIDEO_MAP: Record<string, string> = {
+      "101":  "first-floor-study-area",  // Main Reading Hall
+      "101D": "first-floor-study-area",  // Central Corridor
+      "119":  "hall-test",               // East Commons
+      "024":  "basement-hallway-3",      // East Wing Lab
+      "021":  "basement-hallway-3",      // East Wing Study
+    };
+    for (const [roomId, camName] of Object.entries(ROOM_VIDEO_MAP)) {
+      const cam = cams.find((c) => c.name === camName);
+      if (cam) map[roomId] = cam.url;
+    }
+    return map;
+  }, [regions, cams]);
 
   // Rooms currently being analyzed → yellow pulse on model
   const pulseRoomIds = useMemo(() => {
@@ -58,6 +100,22 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
     setClickedRoomId(roomId);
   }, []);
 
+  // Expand a single active room ID to all rooms in the same region
+  // e.g. "1st floor · 101" → ["1st floor · 101", "1st floor · 101B", "1st floor · 101D"]
+  const highlightRoomIds = useMemo(() => {
+    if (!activeRoomId) return null;
+    // Extract the room ID portion after "floor · "
+    const parts = activeRoomId.split(" · ");
+    if (parts.length < 2) return activeRoomId;
+    const floorPrefix = parts[0];
+    const roomId = parts[1];
+    // Find which region contains this room
+    const region = regions.find((r) => r.roomIds.includes(roomId));
+    if (!region || region.roomIds.length <= 1) return activeRoomId;
+    // Return all room IDs in this region with the floor prefix
+    return region.roomIds.map((id) => `${floorPrefix} · ${id}`);
+  }, [activeRoomId, regions]);
+
   const cameraRegion = useMemo(
     () => (selectedCameraId ? getCameraRegion(selectedCameraId) : null),
     [selectedCameraId],
@@ -78,7 +136,7 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
         <motion.div variants={block} className="flex h-full min-h-0 flex-col lg:col-span-7">
           <FloorOverviewPanel
             cameraRegion={cameraRegion}
-            highlightRoomId={activeRoomId}
+            highlightRoomId={highlightRoomIds}
             onRoomClick={handleRoomClick}
             livePersons={livePersons}
             pulseRoomIds={pulseRoomIds}
@@ -91,6 +149,7 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
             onActiveRoomChange={setActiveRoomId}
             livePersons={livePersons}
             clickedRoomId={clickedRoomId}
+            roomVideoUrls={roomVideoUrls}
           />
         </motion.div>
       </div>

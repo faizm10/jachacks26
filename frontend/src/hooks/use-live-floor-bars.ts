@@ -108,21 +108,11 @@ function saveToStorage(bars: LivePersonBar[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(bars)); } catch { /* ignore */ }
 }
 
-let _cachedBars: LivePersonBar[] = loadFromStorage();
+let _cachedBars: LivePersonBar[] = [];
 let _cachedRegions: MappableRegion[] = [...DEFAULT_REGIONS];
 let _cachedCams: CamOption[] = [];
 let _camsLoaded = false;
-
-// If we restored bars from storage, mark matching regions as done
-if (_cachedBars.length > 0) {
-  const barRoomIds = new Set(_cachedBars.map((b) => b.roomId));
-  _cachedRegions = _cachedRegions.map((r) => {
-    if (r.hardcoded) return r;
-    const hasData = r.roomIds.some((id) => barRoomIds.has(id));
-    if (hasData) return { ...r, status: "done" as const, assignedVideo: "(cached)" };
-    return r;
-  });
-}
+let _storageRestored = false;
 
 /** Read-only access to cached bars (for camera detail pages etc). */
 export function getCachedBars(): LivePersonBar[] {
@@ -154,6 +144,26 @@ export function useLiveFloorBars(opts?: { autoAssign?: boolean }): UseLiveFloorB
       return next;
     });
   }, []);
+
+  // Restore from localStorage on first client mount (avoids SSR hydration mismatch)
+  useEffect(() => {
+    if (_storageRestored) return;
+    _storageRestored = true;
+    const stored = loadFromStorage();
+    if (stored.length > 0) {
+      _cachedBars = stored;
+      setBars(stored);
+      const barRoomIds = new Set(stored.map((b) => b.roomId));
+      setRegions((prev) =>
+        prev.map((r) => {
+          if (r.hardcoded) return r;
+          const hasData = r.roomIds.some((id) => barRoomIds.has(id));
+          if (hasData) return { ...r, status: "done" as const, assignedVideo: "(cached)" };
+          return r;
+        }),
+      );
+    }
+  }, [setBars, setRegions]);
 
   // Fetch available cameras once
   useEffect(() => {

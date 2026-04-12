@@ -74,7 +74,7 @@ function getStackedAreaMarkers(stackGap: number) {
     {
       id: "bs-foyer",
       floor: "Basement",
-      title: "Foyer · You are here",
+      title: "Foyer",
       accent: "#86efac",
       world: roomAnchorWorld(pick(bs, "004"), 0),
     },
@@ -241,18 +241,38 @@ function setStackedOrbitTarget(ctx: ThreeCtx) {
   const f1 = JOHN_ABBOTT_3D_FLOORS.f1;
   const bs = JOHN_ABBOTT_3D_FLOORS.bs;
   const midY = STACK_GAP * 0.52;
-  ctx.target.set((f1.target.x + bs.target.x) / 2, midY, (f1.target.z + bs.target.z) / 2);
+  ctx.target.set(
+    (f1.target.x + bs.target.x) / 2,
+    midY,
+    (f1.target.z + bs.target.z) / 2,
+  );
 }
 
-function createHexColumns(ctx: ThreeCtx, bsYOffset: number, f1YOffset: number | null, livePersons?: LivePersonBar[]) {
-  createJohnAbbottActivityHexes(ctx.scene, ctx.hexColumns, bsYOffset, f1YOffset, livePersons);
+function createHexColumns(
+  ctx: ThreeCtx,
+  bsYOffset: number,
+  f1YOffset: number | null,
+  livePersons?: LivePersonBar[],
+) {
+  createJohnAbbottActivityHexes(
+    ctx.scene,
+    ctx.hexColumns,
+    bsYOffset,
+    f1YOffset,
+    livePersons,
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Build scene
 // ---------------------------------------------------------------------------
 
-function buildScene(ctx: ThreeCtx, mode: ViewMode, hexColumns = true, livePersons?: LivePersonBar[]) {
+function buildScene(
+  ctx: ThreeCtx,
+  mode: ViewMode,
+  hexColumns = true,
+  livePersons?: LivePersonBar[],
+) {
   clearRooms(ctx);
   disposeHexColumns(ctx);
 
@@ -294,9 +314,13 @@ function syncIdleAnchors(ctx: ThreeCtx) {
 
 function updateCamera(ctx: ThreeCtx) {
   const { spherical, target, camera } = ctx;
-  const x = target.x + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+  const x =
+    target.x +
+    spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
   const y = spherical.radius * Math.cos(spherical.phi);
-  const z = target.z + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+  const z =
+    target.z +
+    spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
   camera.position.set(x, y, z);
   camera.lookAt(target);
 }
@@ -387,9 +411,13 @@ export function JohnAbbottLibraryFloorThree({
   pulseRoomIdsRef.current = pulseRoomIds;
   const glowRoomIdsRef = useRef(glowRoomIds);
   glowRoomIdsRef.current = glowRoomIds;
+  const highlightRoomIdRef = useRef(highlightRoomId);
+  highlightRoomIdRef.current = highlightRoomId;
   const stackedEmbed = layoutVariant === "stackedEmbed";
   const [viewMode, setViewMode] = useState<ViewMode>("f1");
-  const [selected, setSelected] = useState<{ id: string; note: string } | null>(null);
+  const [selected, setSelected] = useState<{ id: string; note: string } | null>(
+    null,
+  );
   const effectiveViewMode: ViewMode = focusRegion
     ? focusRegion.floor
     : stackedEmbed
@@ -421,7 +449,9 @@ export function JohnAbbottLibraryFloorThree({
       alpha: transparentBg,
       premultipliedAlpha: false,
     });
-    renderer.setPixelRatio(Math.min(typeof window !== "undefined" ? window.devicePixelRatio : 1, 2));
+    renderer.setPixelRatio(
+      Math.min(typeof window !== "undefined" ? window.devicePixelRatio : 1, 2),
+    );
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -460,7 +490,9 @@ export function JohnAbbottLibraryFloorThree({
         if (!cr?.width) return;
         const w = cr.width;
         const h =
-          fillColumn && cr.height >= 80 ? Math.floor(cr.height) : Math.round((w * 2) / 3);
+          fillColumn && cr.height >= 80
+            ? Math.floor(cr.height)
+            : Math.round((w * 2) / 3);
         setSize(ctx, w, h);
       }),
       onPointerMove: () => {},
@@ -557,9 +589,12 @@ export function JohnAbbottLibraryFloorThree({
       ctx.lastFrameMs = now;
       if (!ctx.drag && enableIdleMotion) {
         ctx.idleT += dt;
-        ctx.spherical.theta = ctx.idleBaseTheta + ctx.idleT * IDLE_ROT_RAD_PER_SEC;
+        ctx.spherical.theta =
+          ctx.idleBaseTheta + ctx.idleT * IDLE_ROT_RAD_PER_SEC;
         ctx.target.x = ctx.idleBaseTarget.x;
-        ctx.target.y = ctx.idleBaseTarget.y + Math.sin(ctx.idleT * IDLE_BOB_FREQ) * IDLE_BOB_AMP;
+        ctx.target.y =
+          ctx.idleBaseTarget.y +
+          Math.sin(ctx.idleT * IDLE_BOB_FREQ) * IDLE_BOB_AMP;
         ctx.target.z = ctx.idleBaseTarget.z;
         updateCamera(ctx);
       }
@@ -573,7 +608,11 @@ export function JohnAbbottLibraryFloorThree({
         const t = now * 0.003;
         const intensity = 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(t));
         for (const m of ctx.meshes) {
-          const ud = m.userData as { id: string; baseEmissive: number; baseEmissiveIntensity: number };
+          const ud = m.userData as {
+            id: string;
+            baseEmissive: number;
+            baseEmissiveIntensity: number;
+          };
           if (pSet.has(ud.id)) {
             const mat = m.material as THREE.MeshStandardMaterial;
             mat.emissive.setHex(0xfbbf24); // amber-400
@@ -581,16 +620,35 @@ export function JohnAbbottLibraryFloorThree({
           }
         }
       }
-      // Green glow on rooms where analysis is complete
+      // Highlight from carousel/user selection — takes highest priority
+      const hRaw = highlightRoomIdRef.current;
+      const hSet = !hRaw ? null : new Set(Array.isArray(hRaw) ? hRaw : [hRaw]);
+
+      // Green glow on rooms where analysis is complete (skip highlighted + pulsing)
       const gIds = glowRoomIdsRef.current;
       if (gIds && gIds.length > 0) {
         const gSet = new Set(gIds);
         for (const m of ctx.meshes) {
-          const ud = m.userData as { id: string; baseEmissive: number; baseEmissiveIntensity: number };
-          if (gSet.has(ud.id) && !(pIds && new Set(pIds).has(ud.id))) {
+          const ud = m.userData as {
+            id: string;
+            baseEmissive: number;
+            baseEmissiveIntensity: number;
+          };
+          if (gSet.has(ud.id) && !(pIds && new Set(pIds).has(ud.id)) && !(hSet && hSet.has(ud.id))) {
             const mat = m.material as THREE.MeshStandardMaterial;
             mat.emissive.setHex(0x34d399); // emerald-400
             mat.emissiveIntensity = 0.7;
+          }
+        }
+      }
+      // Carousel/user highlight — amber glow, always on top
+      if (hSet && hSet.size > 0) {
+        for (const m of ctx.meshes) {
+          const ud = m.userData as { id: string };
+          if (hSet.has(ud.id)) {
+            const mat = m.material as THREE.MeshStandardMaterial;
+            mat.emissive.setHex(0xfde68a);
+            mat.emissiveIntensity = 0.8;
           }
         }
       }
@@ -616,7 +674,10 @@ export function JohnAbbottLibraryFloorThree({
       if (e.buttons === 1) {
         ctx.drag = true;
         ctx.spherical.theta -= dx * 0.008;
-        ctx.spherical.phi = Math.max(0.2, Math.min(1.45, ctx.spherical.phi + dy * 0.008));
+        ctx.spherical.phi = Math.max(
+          0.2,
+          Math.min(1.45, ctx.spherical.phi + dy * 0.008),
+        );
         updateCamera(ctx);
       }
       ctx.prev = { x: e.clientX, y: e.clientY };
@@ -707,7 +768,12 @@ export function JohnAbbottLibraryFloorThree({
     const id = requestAnimationFrame(() => {
       const ctx = ctxRef.current;
       if (!ctx) return;
-      buildScene(ctx, effectiveViewMode, showHexColumns, livePersonsRef.current);
+      buildScene(
+        ctx,
+        effectiveViewMode,
+        showHexColumns,
+        livePersonsRef.current,
+      );
     });
     return () => cancelAnimationFrame(id);
   }, [effectiveViewMode, showHexColumns]);
@@ -719,7 +785,12 @@ export function JohnAbbottLibraryFloorThree({
     if (!ctx) return;
     disposeHexColumns(ctx);
     const isStacked = effectiveViewMode === "stacked";
-    createHexColumns(ctx, 0, isStacked ? STACK_GAP : (effectiveViewMode === "f1" ? 0 : null), livePersons);
+    createHexColumns(
+      ctx,
+      0,
+      isStacked ? STACK_GAP : effectiveViewMode === "f1" ? 0 : null,
+      livePersons,
+    );
   }, [livePersons, effectiveViewMode]);
 
   // Highlight room driven by external carousel
@@ -731,11 +802,19 @@ export function JohnAbbottLibraryFloorThree({
       : Array.isArray(highlightRoomId)
         ? new Set(highlightRoomId)
         : new Set([highlightRoomId]);
-    const pulsing = pulseRoomIdsRef.current ? new Set(pulseRoomIdsRef.current) : null;
-    const glowing = glowRoomIdsRef.current ? new Set(glowRoomIdsRef.current) : null;
+    const pulsing = pulseRoomIdsRef.current
+      ? new Set(pulseRoomIdsRef.current)
+      : null;
+    const glowing = glowRoomIdsRef.current
+      ? new Set(glowRoomIdsRef.current)
+      : null;
     for (const m of ctx.meshes) {
       const mat = m.material as THREE.MeshStandardMaterial;
-      const ud = m.userData as { id: string; baseEmissive: number; baseEmissiveIntensity: number };
+      const ud = m.userData as {
+        id: string;
+        baseEmissive: number;
+        baseEmissiveIntensity: number;
+      };
       // Skip rooms handled by the render loop (pulse / glow)
       if (pulsing && pulsing.has(ud.id)) continue;
       if (glowing && glowing.has(ud.id)) continue;
@@ -757,8 +836,13 @@ export function JohnAbbottLibraryFloorThree({
     // Wait one frame for buildScene to finish populating meshes
     const raf = requestAnimationFrame(() => {
       // Find the room IDs that match, computing a bounding box in scene-space
-      const roomIdSet = new Set(focusRegion.roomIds.map((id) => id.toLowerCase()));
-      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      const roomIdSet = new Set(
+        focusRegion.roomIds.map((id) => id.toLowerCase()),
+      );
+      let minX = Infinity,
+        maxX = -Infinity,
+        minZ = Infinity,
+        maxZ = -Infinity;
       const matched: THREE.Mesh[] = [];
 
       for (const m of ctx.meshes) {
@@ -804,7 +888,10 @@ export function JohnAbbottLibraryFloorThree({
       // Glowing ground plane under the region
       const padX = spanX * 0.08;
       const padZ = spanZ * 0.08;
-      const planeGeo = new THREE.PlaneGeometry(spanX + padX * 2, spanZ + padZ * 2);
+      const planeGeo = new THREE.PlaneGeometry(
+        spanX + padX * 2,
+        spanZ + padZ * 2,
+      );
       const planeMat = new THREE.MeshBasicMaterial({
         color: 0xfb923c,
         transparent: true,
@@ -843,18 +930,27 @@ export function JohnAbbottLibraryFloorThree({
     return () => {
       cancelAnimationFrame(raf);
       // Clean up added objects
-      for (const name of ["focusRegionGlow", "focusRegionLight", "focusRegionFill"]) {
+      for (const name of [
+        "focusRegionGlow",
+        "focusRegionLight",
+        "focusRegionFill",
+      ]) {
         const obj = ctx.scene.getObjectByName(name);
         if (obj) {
           ctx.scene.remove(obj);
-          if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
-          if ((obj as THREE.Mesh).material) ((obj as THREE.Mesh).material as THREE.Material).dispose();
+          if ((obj as THREE.Mesh).geometry)
+            (obj as THREE.Mesh).geometry.dispose();
+          if ((obj as THREE.Mesh).material)
+            ((obj as THREE.Mesh).material as THREE.Material).dispose();
         }
       }
       // Restore room opacities
       for (const m of ctx.meshes) {
         const mat = m.material as THREE.MeshStandardMaterial;
-        const ud = m.userData as { baseEmissive: number; baseEmissiveIntensity: number };
+        const ud = m.userData as {
+          baseEmissive: number;
+          baseEmissiveIntensity: number;
+        };
         mat.emissive.setHex(ud.baseEmissive);
         mat.emissiveIntensity = ud.baseEmissiveIntensity;
         // Restore opacity from material type defaults
@@ -902,7 +998,10 @@ export function JohnAbbottLibraryFloorThree({
             depthTest: true,
             side: THREE.DoubleSide,
           });
-          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_SLAB.width, FLOOR_SLAB.depth), mat);
+          const mesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(FLOOR_SLAB.width, FLOOR_SLAB.depth),
+            mat,
+          );
           mesh.rotation.x = -Math.PI / 2;
           mesh.position.set(FLOOR_SLAB.cx, FLOOR_SLAB.cyHeat, FLOOR_SLAB.cz);
           mesh.renderOrder = 2;
@@ -933,15 +1032,13 @@ export function JohnAbbottLibraryFloorThree({
         "flex flex-col gap-2",
         stackedEmbed && fillColumn && "h-full min-h-0 flex-1",
         className,
-      )}
-    >
+      )}>
       {!stackedEmbed ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div
             className="inline-flex gap-0.5 rounded-lg border border-white/[0.08] bg-black/40 p-0.5"
             role="tablist"
-            aria-label="Library floor"
-          >
+            aria-label="Library floor">
             {(
               [
                 ["f1", "1st floor"],
@@ -963,8 +1060,7 @@ export function JohnAbbottLibraryFloorThree({
                   viewMode === key
                     ? "bg-white/[0.12] text-white shadow-sm"
                     : "text-white/45 hover:bg-white/[0.06] hover:text-white/75",
-                )}
-              >
+                )}>
                 {label}
               </button>
             ))}
@@ -989,11 +1085,13 @@ export function JohnAbbottLibraryFloorThree({
           "relative w-full overflow-hidden",
           stackedEmbed && fillColumn && "min-h-0 flex-1",
           stackedEmbed && !fillColumn && "aspect-[3/2]",
-          !stackedEmbed && "aspect-[3/2] rounded-xl border border-white/[0.06] bg-[#0c0f14]",
+          !stackedEmbed &&
+            "aspect-[3/2] rounded-xl border border-white/[0.06] bg-[#0c0f14]",
           stackedEmbed && "rounded-none border-0 bg-transparent",
         )}
-        aria-label={stackedEmbed ? "Stacked library floors, 3D" : "Library floor, 3D"}
-      >
+        aria-label={
+          stackedEmbed ? "Stacked library floors, 3D" : "Library floor, 3D"
+        }>
         {cornerActions ? (
           <div className="pointer-events-none absolute right-2 top-2 z-40 flex flex-col items-end gap-1">
             <div className="pointer-events-auto z-20">{cornerActions}</div>
@@ -1013,14 +1111,24 @@ export function JohnAbbottLibraryFloorThree({
             <div className="pointer-events-auto rounded-xl border border-white/[0.08] bg-black/60 px-3 py-2.5 backdrop-blur-sm">
               {selected ? (
                 <>
-                  <p className="text-sm font-medium text-white/90">{selected.id}</p>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-white/50">{selected.note}</p>
-                  <p className="mt-2 text-[10px] text-white/35">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
+                  <p className="text-sm font-medium text-white/90">
+                    {selected.id}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-white/50">
+                    {selected.note}
+                  </p>
+                  <p className="mt-2 text-[10px] text-white/35">
+                    {JOHN_ABBOTT_LIBRARY_SUBTITLE}
+                  </p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-medium text-white/75">Select a room</p>
-                  <p className="mt-0.5 text-[11px] text-white/40">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
+                  <p className="text-sm font-medium text-white/75">
+                    Select a room
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-white/40">
+                    {JOHN_ABBOTT_LIBRARY_SUBTITLE}
+                  </p>
                 </>
               )}
             </div>
