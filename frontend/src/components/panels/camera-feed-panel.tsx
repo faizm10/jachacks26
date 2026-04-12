@@ -12,7 +12,7 @@ import { motion } from "framer-motion";
 import { Clapperboard } from "lucide-react";
 import Link from "next/link";
 import type { RefObject } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 function StatusBadge({ status }: { status: ReturnType<typeof useCamsAllFeeds>["status"] }) {
@@ -136,8 +136,22 @@ function VideoTile({
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>("idle");
   const [retryKey, setRetryKey] = useState(0);
   const [videoRef, setVideoRef] = useState<RefObject<HTMLVideoElement | null> | null>(null);
+  const [inView, setInView] = useState(true);
+  const tileRef = useRef<HTMLDivElement>(null);
   const fileName = obj.path.split("/").pop() ?? obj.path;
   const isVideo = obj.kind === "video";
+
+  // Lazy load: only render video/AR when tile is in viewport
+  useEffect(() => {
+    const el = tileRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { rootMargin: "100px 0px" }, // start loading 100px before visible
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Per-tile live analysis — captures frames from this tile's video
   const { analysis } = useLiveAnalysis(isVideo ? obj.url : null, {
@@ -165,7 +179,7 @@ function VideoTile({
     : "border-white/[0.06] hover:border-white/[0.18] hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]";
 
   return (
-    <div className="flex flex-col gap-0">
+    <div ref={tileRef} className="flex flex-col gap-0">
       {/* Tile */}
       <div
         role="button"
@@ -182,7 +196,12 @@ function VideoTile({
       >
         <div className="aspect-video min-h-[11.5rem] w-full bg-black sm:min-h-[13rem] lg:min-h-[14.5rem]">
           {!errored ? (
-            isVideo ? (
+            !inView ? (
+              /* Placeholder when out of viewport — no video loaded */
+              <div className="flex h-full w-full items-center justify-center">
+                <p className="text-[11px] text-white/20">{fileName}</p>
+              </div>
+            ) : isVideo ? (
               <ARLabelsOverlay
                 videoUrl={obj.url}
                 persons={analysis?.persons ?? []}
@@ -339,7 +358,7 @@ export function CameraFeedPanel({ selectedUrl, onSelect }: CameraFeedPanelProps)
         </div>
       ) : (
         <>
-          <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div className="mt-4 flex flex-col gap-5">
             {objects.map((obj) => (
               <VideoTile
                 key={obj.path}
