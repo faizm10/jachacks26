@@ -21,6 +21,7 @@ const block = {
 export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
 
   const handleSelect = useCallback(
     (obj: { url: string; path?: string }) => {
@@ -55,10 +56,10 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
       {/* ═══ HERO: Floor map + Building vibe ═══ */}
       <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
         <motion.div variants={block} className="flex h-full min-h-0 flex-col lg:col-span-7">
-          <FloorOverviewPanel cameraRegion={cameraRegion} />
+          <FloorOverviewPanel cameraRegion={cameraRegion} highlightRoomId={activeRoomId} />
         </motion.div>
         <motion.div variants={block} className="lg:col-span-5">
-          <BuildingVibePanel stats={snapshot.stats} insights={snapshot.insights} />
+          <BuildingVibePanel stats={snapshot.stats} insights={snapshot.insights} onActiveRoomChange={setActiveRoomId} />
         </motion.div>
       </div>
 
@@ -74,14 +75,11 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
       </motion.div>
 
       <div className="grid gap-6 lg:grid-cols-12" id="camera-feed">
-        {/* Color legend floated on the left */}
         <motion.div variants={block} className="lg:col-span-3">
           <div className="sticky top-24">
             <ArLabelColorLegend />
           </div>
         </motion.div>
-
-        {/* Camera feeds with inline AR overlay on selected tile */}
         <motion.div variants={block} className="lg:col-span-9">
           <CameraFeedPanel
             selectedUrl={selectedUrl}

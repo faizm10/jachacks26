@@ -4,6 +4,83 @@ import {
   type LibraryFloorKey,
 } from "@/lib/spatial/john-abbott-library-3d-data";
 
+// ── Vibe types ─────────────��─────────────────────────────────────────────────
+
+export type VibeKind = "locked-in" | "social" | "collab" | "transit";
+
+const VIBE_PALETTE: Record<VibeKind, { color: number; emissive: number }> = {
+  "locked-in": { color: 0xef4444, emissive: 0x7f1d1d }, // red — matches Locked In label
+  social:      { color: 0xf97316, emissive: 0x7c2d12 }, // orange — matches Social label
+  collab:      { color: 0x8b5cf6, emissive: 0x4c1d95 }, // violet — matches Collaborative label
+  transit:     { color: 0x64748b, emissive: 0x1e293b }, // slate — passing through
+};
+
+// ── Per-room simulation ──────────────────────────────────────────────────────
+// Each room gets a density (0-1) and a weighted vibe mix.
+
+interface RoomVibeSim {
+  density: number; // 0–1, controls how many hex cells actually spawn a bar
+  vibes: Partial<Record<VibeKind, number>>; // relative weights, will be normalised
+}
+
+// Core hotspots get high density + rich vibe mix.
+// Peripheral rooms get very sparse bars.
+const ROOM_SIMS: Record<string, RoomVibeSim> = {
+  // ── 1st floor ────────────────────────���─────────────────────────────────
+  // Main reading hall (core)
+  "101":  { density: 0.55, vibes: { "locked-in": 0.6, collab: 0.25, social: 0.15 } },
+  "101B": { density: 0.45, vibes: { "locked-in": 0.5, collab: 0.3, social: 0.2 } },
+  "101A": { density: 0.3,  vibes: { collab: 0.5, "locked-in": 0.3, social: 0.2 } },
+  "101C": { density: 0.35, vibes: { "locked-in": 0.65, collab: 0.25, social: 0.1 } },
+  // East commons (core)
+  "119":  { density: 0.6,  vibes: { social: 0.5, collab: 0.3, "locked-in": 0.2 } },
+  // Corridor / service — very sparse
+  "101D": { density: 0.08, vibes: { transit: 0.8, social: 0.2 } },
+  "104":  { density: 0.12, vibes: { social: 0.4, transit: 0.6 } },
+  "110":  { density: 0.05, vibes: { transit: 1 } },
+  "111":  { density: 0.04, vibes: { transit: 1 } },
+  "105":  { density: 0.03, vibes: { transit: 1 } },
+  "115":  { density: 0.03, vibes: { transit: 1 } },
+  // Study rooms — a few focused bars
+  "102":  { density: 0.15, vibes: { "locked-in": 0.9, collab: 0.1 } },
+  "103":  { density: 0.2,  vibes: { social: 0.5, "locked-in": 0.4, collab: 0.1 } },
+  "112":  { density: 0.18, vibes: { "locked-in": 0.85, collab: 0.15 } },
+  "114":  { density: 0.15, vibes: { "locked-in": 0.9, collab: 0.1 } },
+  "116":  { density: 0.12, vibes: { "locked-in": 0.8, collab: 0.2 } },
+  "118":  { density: 0.1,  vibes: { "locked-in": 0.85, collab: 0.15 } },
+  "120":  { density: 0.1,  vibes: { "locked-in": 0.9, collab: 0.1 } },
+  "122":  { density: 0.1,  vibes: { "locked-in": 0.9, collab: 0.1 } },
+
+  // ── Basement ───────────────────────────────────────────────────────────
+  // Open study core (core)
+  "001":  { density: 0.55, vibes: { "locked-in": 0.45, social: 0.3, collab: 0.25 } },
+  "002":  { density: 0.4,  vibes: { collab: 0.4, social: 0.35, "locked-in": 0.25 } },
+  // East wing — lab & study (core)
+  "024":  { density: 0.45, vibes: { "locked-in": 0.7, collab: 0.2, social: 0.1 } },
+  "021":  { density: 0.3,  vibes: { social: 0.5, collab: 0.3, "locked-in": 0.2 } },
+  // Foyer / service
+  "004":  { density: 0.15, vibes: { transit: 0.5, social: 0.3, collab: 0.2 } },
+  // Study rooms
+  "014":  { density: 0.18, vibes: { "locked-in": 0.8, collab: 0.2 } },
+  "016":  { density: 0.15, vibes: { "locked-in": 0.85, collab: 0.15 } },
+  "018":  { density: 0.12, vibes: { "locked-in": 0.7, social: 0.3 } },
+  "020":  { density: 0.15, vibes: { "locked-in": 0.8, collab: 0.2 } },
+  "023":  { density: 0.12, vibes: { "locked-in": 0.75, collab: 0.25 } },
+  "025":  { density: 0.1,  vibes: { "locked-in": 0.85, collab: 0.15 } },
+  // Corridors / utility — barely anything
+  "003":  { density: 0.02, vibes: { transit: 1 } },
+  "005":  { density: 0.02, vibes: { transit: 1 } },
+  "008":  { density: 0.03, vibes: { transit: 1 } },
+  "010":  { density: 0.04, vibes: { transit: 0.8, social: 0.2 } },
+  "011":  { density: 0.02, vibes: { transit: 1 } },
+  "013":  { density: 0.02, vibes: { transit: 1 } },
+  "015":  { density: 0.02, vibes: { transit: 1 } },
+  "017":  { density: 0.02, vibes: { transit: 1 } },
+  "030":  { density: 0.03, vibes: { transit: 1 } },
+};
+
+// ── Activity zones (kept for external label anchors) ─────────────────────────
+
 export type ActivityZone = {
   id: string;
   label: string;
@@ -31,13 +108,14 @@ export const FIRST_FLOOR_ZONES: ActivityZone[] = [
     roomIds: ["103", "104"], occupancy: 0.55 },
 ];
 
-/** Same scale as room geometry in the 3D viewers. */
+// ── Geometry constants ───────────────────────────────────────────────────────
+
 export const HEATMAP_SCALE = 0.9;
 
-export const HEX_RADIUS = 6;
-export const HEX_MAX_HEIGHT = 35;
-export const HEX_PULSE_SPEED = 0.9;
-export const HEX_PULSE_AMP = 0.18;
+export const HEX_RADIUS = 3.5;
+export const HEX_MAX_HEIGHT = 38;
+export const HEX_PULSE_SPEED = 0.3;
+export const HEX_PULSE_AMP = 0.12;
 
 let _sharedHexUnitGeo: THREE.CylinderGeometry | null = null;
 
@@ -47,6 +125,8 @@ function getHexUnitGeometry(): THREE.CylinderGeometry {
   }
   return _sharedHexUnitGeo;
 }
+
+// ── Hex grid helpers ─────────────────────────────────────────────────────────
 
 export function hexGridCenters(
   rx: number, rz: number, rw: number, rd: number, radius: number,
@@ -64,58 +144,98 @@ export function hexGridCenters(
   return centers;
 }
 
+// ── Seeded random for deterministic distribution ─────────────────────────────
+
+function mulberry32(seed: number) {
+  return () => {
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Pick a vibe kind from weighted mix. */
+function pickVibe(vibes: Partial<Record<VibeKind, number>>, rand: () => number): VibeKind {
+  const entries = Object.entries(vibes) as [VibeKind, number][];
+  const total = entries.reduce((s, [, w]) => s + w, 0);
+  let r = rand() * total;
+  for (const [kind, weight] of entries) {
+    r -= weight;
+    if (r <= 0) return kind;
+  }
+  return entries[entries.length - 1][0];
+}
+
+// ── Build hex columns per floor ──────────────────��───────────────────────────
+
 export function appendHexColumnsForFloor(
   scene: THREE.Scene,
   out: THREE.Mesh[],
   floorKey: LibraryFloorKey,
-  zones: readonly ActivityZone[],
+  _zones: readonly ActivityZone[],
   yOffset: number,
 ) {
   const rooms = JOHN_ABBOTT_3D_FLOORS[floorKey].rooms;
   const unitGeo = getHexUnitGeometry();
 
-  for (const zone of zones) {
-    const baseColor = new THREE.Color(zone.color);
-    const emissiveColor = baseColor.clone().multiplyScalar(0.35);
+  for (const room of rooms) {
+    const sim = ROOM_SIMS[room.id];
+    if (!sim || sim.density <= 0) continue;
 
-    for (const roomId of zone.roomIds) {
-      const room = rooms.find((r) => r.id === roomId);
-      if (!room) continue;
+    const rx = room.x * HEATMAP_SCALE;
+    const rz = room.z * HEATMAP_SCALE;
+    const rw = room.w * HEATMAP_SCALE;
+    const rd = room.d * HEATMAP_SCALE;
+    const roofY = room.h * 5 + yOffset;
+    const centers = hexGridCenters(rx, rz, rw, rd, HEX_RADIUS);
 
-      const rx = room.x * HEATMAP_SCALE;
-      const rz = room.z * HEATMAP_SCALE;
-      const rw = room.w * HEATMAP_SCALE;
-      const rd = room.d * HEATMAP_SCALE;
-      const roofY = room.h * 5 + yOffset;
-      const centers = hexGridCenters(rx, rz, rw, rd, HEX_RADIUS);
+    // Seeded random per room for deterministic look
+    const rng = mulberry32(room.id.charCodeAt(0) * 1000 + (room.id.charCodeAt(1) || 0) * 31 + yOffset);
 
-      for (const [cx, cz] of centers) {
-        const jitter = 0.75 + Math.random() * 0.5;
-        const h = zone.occupancy * HEX_MAX_HEIGHT * jitter;
-        if (h < 1) continue;
+    for (const [cx, cz] of centers) {
+      // Stochastic spawn — only `density` fraction of cells get a bar
+      if (rng() > sim.density) continue;
 
-        const mat = new THREE.MeshStandardMaterial({
-          color: baseColor,
-          transparent: true,
-          opacity: 0.72 + zone.occupancy * 0.2,
-          roughness: 0.5,
-          metalness: 0.15,
-          emissive: emissiveColor,
-          emissiveIntensity: 0.6 + zone.occupancy * 0.4,
-        });
+      // Pick a vibe for this bar
+      const vibe = pickVibe(sim.vibes, rng);
+      const palette = VIBE_PALETTE[vibe];
 
-        const mesh = new THREE.Mesh(unitGeo, mat);
-        mesh.scale.set(1, h, 1);
-        mesh.position.set(cx, roofY + h / 2, cz);
-        mesh.userData = {
-          zoneId: zone.id,
-          baseHeight: h,
-          phaseOffset: Math.random() * Math.PI * 2,
-        };
-        mesh.raycast = () => {};
-        scene.add(mesh);
-        out.push(mesh);
-      }
+      // Height driven by density + per-bar jitter — higher = denser population
+      const jitter = 0.6 + rng() * 0.8;
+      const h = sim.density * HEX_MAX_HEIGHT * jitter;
+      if (h < 1.5) continue;
+
+      // Slight colour variance per bar for organic feel
+      const baseColor = new THREE.Color(palette.color);
+      const hsl = { h: 0, s: 0, l: 0 };
+      baseColor.getHSL(hsl);
+      hsl.h += (rng() - 0.5) * 0.06;  // ±3% hue shift
+      hsl.s = Math.min(1, hsl.s + (rng() - 0.5) * 0.15);
+      hsl.l = Math.min(1, Math.max(0, hsl.l + (rng() - 0.5) * 0.12));
+      baseColor.setHSL(hsl.h, hsl.s, hsl.l);
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: baseColor,
+        transparent: true,
+        opacity: 0.65 + sim.density * 0.25,
+        roughness: 0.5,
+        metalness: 0.15,
+        emissive: new THREE.Color(palette.emissive),
+        emissiveIntensity: 0.5 + sim.density * 0.5,
+      });
+
+      const mesh = new THREE.Mesh(unitGeo, mat);
+      mesh.scale.set(1, h, 1);
+      mesh.position.set(cx, roofY + h / 2, cz);
+      mesh.userData = {
+        zoneId: vibe,
+        baseHeight: h,
+        phaseOffset: rng() * Math.PI * 2,
+      };
+      mesh.raycast = () => {};
+      scene.add(mesh);
+      out.push(mesh);
     }
   }
 }
@@ -160,6 +280,8 @@ export function pulseHexColumns(columns: THREE.Mesh[], idleT: number) {
     col.position.y = ud.baseY - ud.baseHeight / 2 + h / 2;
   }
 }
+
+// ── Zone label anchors (unchanged API) ────────────────��──────────────────────
 
 export type ZoneLabelAnchor = {
   id: string;

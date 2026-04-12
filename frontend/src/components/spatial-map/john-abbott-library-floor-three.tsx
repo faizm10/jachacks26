@@ -70,6 +70,27 @@ function getStackedAreaMarkers(stackGap: number) {
       accent: "#fcd34d",
       world: roomAnchorWorld(pick(f1, "104"), stackGap),
     },
+    {
+      id: "bs-foyer",
+      floor: "Basement",
+      title: "Foyer · You are here",
+      accent: "#86efac",
+      world: roomAnchorWorld(pick(bs, "004"), 0),
+    },
+    {
+      id: "bs-open",
+      floor: "Basement",
+      title: "Open study core",
+      accent: "#67e8f9",
+      world: roomAnchorWorld(pick(bs, "001"), 0),
+    },
+    {
+      id: "bs-east",
+      floor: "Basement",
+      title: "East wing · lab & study",
+      accent: "#93c5fd",
+      world: roomAnchorWorld(pick(bs, "024"), 0),
+    },
   ] as const;
 }
 
@@ -317,6 +338,7 @@ export function JohnAbbottLibraryFloorThree({
   motionHeatOverlayUrl = null,
   layoutVariant = "default",
   fillColumn = false,
+  highlightRoomId,
 }: {
   className?: string;
   cornerActions?: ReactNode;
@@ -324,6 +346,7 @@ export function JohnAbbottLibraryFloorThree({
   motionHeatOverlayUrl?: string | null;
   layoutVariant?: "default" | "stackedEmbed";
   fillColumn?: boolean;
+  highlightRoomId?: string | null;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -544,10 +567,13 @@ export function JohnAbbottLibraryFloorThree({
         pickHover(ctx, e.clientX, e.clientY);
         ctx.raycaster.setFromCamera(ctx.mouse, ctx.camera);
         const hits = ctx.raycaster.intersectObjects(ctx.meshes);
+
         if (hits.length > 0) {
           const mesh = hits[0].object as THREE.Mesh;
           const { id, note } = mesh.userData as { id: string; note: string };
           setSelected({ id, note });
+        } else {
+          setSelected(null);
         }
       }
       try {
@@ -612,6 +638,23 @@ export function JohnAbbottLibraryFloorThree({
     });
     return () => cancelAnimationFrame(id);
   }, [effectiveViewMode]);
+
+  // Highlight room driven by external carousel
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    for (const m of ctx.meshes) {
+      const mat = m.material as THREE.MeshStandardMaterial;
+      const ud = m.userData as { id: string; baseEmissive: number; baseEmissiveIntensity: number };
+      if (highlightRoomId && ud.id === highlightRoomId) {
+        mat.emissive.setHex(0xfde68a);
+        mat.emissiveIntensity = 0.8;
+      } else {
+        mat.emissive.setHex(ud.baseEmissive);
+        mat.emissiveIntensity = ud.baseEmissiveIntensity;
+      }
+    }
+  }, [highlightRoomId]);
 
   useEffect(() => {
     if (!motionHeatOverlayUrl) {
@@ -757,24 +800,26 @@ export function JohnAbbottLibraryFloorThree({
           )}
         />
         {canvasChildren}
-      </div>
 
-      {!stackedEmbed ? (
-        <div className="rounded-xl border border-white/[0.08] bg-black/35 px-3 py-2.5">
-          {selected ? (
-            <>
-              <p className="text-sm font-medium text-white/90">{selected.id}</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-white/50">{selected.note}</p>
-              <p className="mt-2 text-[10px] text-white/35">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-medium text-white/75">Select a room</p>
-              <p className="mt-0.5 text-[11px] text-white/40">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
-            </>
-          )}
-        </div>
-      ) : null}
+        {!stackedEmbed && (
+          <div className="pointer-events-none absolute bottom-2 left-2 z-40">
+            <div className="pointer-events-auto rounded-xl border border-white/[0.08] bg-black/60 px-3 py-2.5 backdrop-blur-sm">
+              {selected ? (
+                <>
+                  <p className="text-sm font-medium text-white/90">{selected.id}</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-white/50">{selected.note}</p>
+                  <p className="mt-2 text-[10px] text-white/35">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-white/75">Select a room</p>
+                  <p className="mt-0.5 text-[11px] text-white/40">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

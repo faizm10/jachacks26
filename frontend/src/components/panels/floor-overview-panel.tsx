@@ -9,12 +9,18 @@ import { useState } from "react";
 
 type FloorHeroVisual = "mesh" | "pointCloud";
 
-export function FloorOverviewPanel({ cameraRegion: _cameraRegion }: { cameraRegion: CameraRegion | null }) {
+export function FloorOverviewPanel({
+  cameraRegion: _cameraRegion,
+  highlightRoomId,
+}: {
+  cameraRegion: CameraRegion | null;
+  highlightRoomId?: string | null;
+}) {
   const [visual, setVisual] = useState<FloorHeroVisual>("mesh");
 
   return (
     <div className="flex h-full min-h-0 w-full min-h-[420px] flex-col lg:min-h-[min(88vh,920px)]">
-      <div className="mb-1.5 flex shrink-0 items-center justify-between gap-3">
+      <div className="mb-1.5 flex shrink-0 flex-col items-start gap-1.5">
         <div
           className="inline-flex rounded-md border border-white/[0.05] bg-white/[0.02] p-px"
           role="tablist"
@@ -50,9 +56,15 @@ export function FloorOverviewPanel({ cameraRegion: _cameraRegion }: { cameraRegi
           </button>
         </div>
 
-        <div className="flex items-center gap-2.5 text-right">
+        <div className="flex items-center gap-2.5">
           <div className="leading-none">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/35">Campus model</p>
+            <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/35">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              Campus model
+            </p>
             <p className="mt-0.5 text-[11px] font-semibold tracking-tight text-white/80">
               John Abbott College
               <span className="ml-1 font-normal text-white/40">&middot; Herzberg Library</span>
@@ -70,7 +82,7 @@ export function FloorOverviewPanel({ cameraRegion: _cameraRegion }: { cameraRegi
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         {visual === "mesh" ? (
-          <JohnAbbottLibraryFloorThree layoutVariant="stackedEmbed" fillColumn className="min-h-0 flex-1" />
+          <JohnAbbottLibraryFloorThree layoutVariant="stackedEmbed" fillColumn className="min-h-0 flex-1" highlightRoomId={highlightRoomId} />
         ) : (
           <PointCloudFloorPlan fillColumn className="min-h-0 flex-1" />
         )}
