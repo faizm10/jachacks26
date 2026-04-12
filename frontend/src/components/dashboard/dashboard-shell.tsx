@@ -2,20 +2,14 @@
 
 import { ActiveVideoProvider } from "@/components/room-intel/active-video-context";
 import { Sidebar } from "@/components/dashboard/sidebar";
-import { TopNav } from "@/components/dashboard/top-nav";
 import { useState, type ReactNode } from "react";
 
-export function DashboardShell({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function DashboardShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
       <Sidebar open={open} onNavigate={() => setOpen(false)} />
-      <TopNav onMenuClick={() => setOpen((v) => !v)} />
       <main className="relative flex-1 bg-background px-4 py-6 sm:px-6 lg:px-8">
         <div
           className="pointer-events-none absolute inset-0 opacity-40"
