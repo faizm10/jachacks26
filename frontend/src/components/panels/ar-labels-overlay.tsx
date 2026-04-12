@@ -380,6 +380,14 @@ export interface ARLabelsOverlayProps {
   highlightedPersonId?: string | null;
   /** When true, renders without outer GlassPanel/header/legend (embedded in camera tile) */
   inline?: boolean;
+  /** Called when the scene description updates (inline mode) so the parent can render it outside the overlay. */
+  onSceneDescription?: (desc: string, status: "idle" | "sending" | "done" | "failed") => void;
+  /** Controlled expand — parent sets true to open the expanded modal. */
+  expanded?: boolean;
+  /** Called when the expanded modal is closed. */
+  onExpandedChange?: (v: boolean) => void;
+  /** Increment to force re-analysis (e.g. after a failure). */
+  retryKey?: number;
 }
 
 export function ARLabelsOverlay({
@@ -388,6 +396,10 @@ export function ARLabelsOverlay({
   liveSceneSummary,
   highlightedPersonId,
   inline,
+  onSceneDescription,
+  expanded: controlledExpanded,
+  onExpandedChange,
+  retryKey,
 }: ARLabelsOverlayProps) {
   const latestPersonsRef = useRef<DetectedPerson[]>(persons);
   latestPersonsRef.current = persons;
@@ -401,14 +413,24 @@ export function ARLabelsOverlay({
   const expandedVideoRef = useRef<HTMLVideoElement | null>(null);
   const expandedCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const expandedRafRef = useRef<number | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const expanded = controlledExpanded ?? internalExpanded;
+  const setExpanded = useCallback((v: boolean) => {
+    setInternalExpanded(v);
+    onExpandedChange?.(v);
+  }, [onExpandedChange]);
   const hasVideo = !!videoUrl;
 
   const [modelReady, setModelReady] = useState(false);
   const [personCount, setPersonCount] = useState(0);
-  /** When any visible labeled track is “locked in”, tint the header count chip pink. */
+  /** When any visible labeled track is "locked in", tint the header count chip pink. */
   const [lockedInChip, setLockedInChip] = useState(false);
-  const [sceneDescription, setSceneDescription] = useState("");
+  const [geminiStatusState, setGeminiStatusState] = useState<GeminiDrawStatus>("idle");
+  const [sceneDescription, setSceneDescriptionInternal] = useState("");
+  const setSceneDescription = useCallback((desc: string) => {
+    setSceneDescriptionInternal(desc);
+    onSceneDescription?.(desc, geminiStatusState);
+  }, [onSceneDescription, geminiStatusState]);
 
   // Load model
   useEffect(() => {
@@ -426,8 +448,7 @@ export function ARLabelsOverlay({
 
     let lastCountUpdate = 0;
     let lastVideoTime = -1;
-    let detectionDone = false; // true after one full video pass
-    let maxTimeReached = 0;    // highest video time seen
+    let maxTimeReached = 0;
 
     const loop = async () => {
       const video = videoRef.current;
@@ -448,15 +469,15 @@ export function ARLabelsOverlay({
 
       const currentTime = video.currentTime;
 
-      // Detect when the video loops: time jumps backward significantly
+      // Detect when the video loops: time jumps backward significantly — reset tracking
       if (currentTime < maxTimeReached - 1 && maxTimeReached > 1) {
-        detectionDone = true;
+        maxTimeReached = 0;
+        tracksRef.current = [];
       }
       maxTimeReached = Math.max(maxTimeReached, currentTime);
 
-      // After one full pass, just redraw existing tracks — no new detection
-      // Also skip if video time hasn't changed (paused)
-      if (detectionDone || Math.abs(currentTime - lastVideoTime) < 0.01) {
+      // Skip if video time hasn't changed (paused)
+      if (Math.abs(currentTime - lastVideoTime) < 0.01) {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           drawTracks(
@@ -531,18 +552,27 @@ export function ARLabelsOverlay({
     };
   }, [hasVideo, modelReady]);
 
+  // Notify parent when status changes
+  useEffect(() => {
+    onSceneDescription?.(sceneDescription, geminiStatusState);
+  }, [geminiStatusState, sceneDescription, onSceneDescription]);
+
   // Gemini activity labels — run ONCE per video, cache across video switches
   // Persistent cache: url → { persons, sceneDescription }
   const analysisCacheRef = useRef<Map<string, { persons: DetectedPerson[]; scene: string }>>(new Map());
   const geminiCanvas = useRef<HTMLCanvasElement | null>(null);
   const inFlight = useRef(false);
   const geminiStatus = useRef<GeminiDrawStatus>("idle");
+  const setGeminiStatus = useCallback((s: GeminiDrawStatus) => {
+    geminiStatus.current = s;
+    setGeminiStatusState(s);
+  }, []);
   const cachedGeminiPersons = useRef<DetectedPerson[]>([]);
 
   const analyzeOnce = useCallback(async () => {
     if (!videoUrl || inFlight.current) return;
     if (latestPersonsRef.current.length > 0) {
-      geminiStatus.current = "done";
+      setGeminiStatus("done");
       return;
     }
 
@@ -550,7 +580,7 @@ export function ARLabelsOverlay({
     const cached = analysisCacheRef.current.get(videoUrl);
     if (cached) {
       cachedGeminiPersons.current = cached.persons;
-      geminiStatus.current = "done";
+      setGeminiStatus("done");
       setSceneDescription(cached.scene);
       console.log("[AR] Loaded from cache —", cached.persons.length, "persons.");
       return;
@@ -583,7 +613,7 @@ export function ARLabelsOverlay({
     if (!base64 || base64.length < 100) return;
 
     inFlight.current = true;
-    geminiStatus.current = "sending";
+    setGeminiStatus("sending");
     console.log("[AR] Sending frame to Gemini...");
 
     try {
@@ -594,14 +624,14 @@ export function ARLabelsOverlay({
       });
       if (!res.ok) {
         console.warn("[AR] Gemini failed:", res.status);
-        geminiStatus.current = "failed";
+        setGeminiStatus("failed");
         return;
       }
       const data = (await res.json()) as FrameAnalysis;
       console.log("[AR] Gemini done —", data.persons.length, "persons.");
 
       cachedGeminiPersons.current = data.persons;
-      geminiStatus.current = "done";
+      setGeminiStatus("done");
       setSceneDescription(data.sceneDescription);
 
       // Save to persistent cache
@@ -611,7 +641,7 @@ export function ARLabelsOverlay({
       });
     } catch (e) {
       console.error("[AR] Gemini error:", e);
-      geminiStatus.current = "failed";
+      setGeminiStatus("failed");
     } finally {
       inFlight.current = false;
     }
@@ -621,7 +651,7 @@ export function ARLabelsOverlay({
     const scene = (liveSceneSummary ?? "").trim();
     if (persons.length > 0 && scene) {
       setSceneDescription(scene);
-      geminiStatus.current = "done";
+      setGeminiStatus("done");
     }
   }, [persons, liveSceneSummary]);
 
@@ -633,13 +663,13 @@ export function ARLabelsOverlay({
     const cached = analysisCacheRef.current.get(videoUrl);
     if (cached) {
       cachedGeminiPersons.current = cached.persons;
-      geminiStatus.current = "done";
+      setGeminiStatus("done");
       setSceneDescription(cached.scene);
       return;
     }
 
     // Not cached — run analysis with retries
-    geminiStatus.current = "idle";
+    setGeminiStatus("idle");
     let attempt = 0;
     const delays = [1500, 6000, 15000];
 
@@ -670,66 +700,89 @@ export function ARLabelsOverlay({
     // Reset Gemini state for this video (cache check happens in the effect above)
     if (!videoUrl || !analysisCacheRef.current.has(videoUrl)) {
       cachedGeminiPersons.current = [];
-      geminiStatus.current = "idle";
+      setGeminiStatus("idle");
       setSceneDescription("");
     }
   }, [videoUrl]);
 
+  // Re-trigger analysis when parent bumps retryKey
+  useEffect(() => {
+    if (!retryKey || !videoUrl) return;
+    inFlight.current = false;
+    analysisCacheRef.current.delete(videoUrl);
+    cachedGeminiPersons.current = [];
+    setGeminiStatus("idle");
+    setSceneDescription("");
+    const timer = window.setTimeout(() => void analyzeOnce(), 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retryKey]);
+
   // ── Inline mode: just the video + canvas, no wrapper ──
   if (inline) {
     return (
-      <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/60">
-        {personCount > 0 && (
-          <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-            <span className="rounded-full border border-emerald-400/25 bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-sm">
-              {personCount} people
-            </span>
-          </div>
-        )}
-        {hasVideo ? (
-          <>
-            <video
-              ref={videoRef}
-              key={videoUrl}
-              data-live-frame-capture=""
-              data-analysis-url={videoUrl ?? ""}
-              className="h-full w-full object-contain"
-              src={videoUrl}
-              autoPlay
-              muted
-              playsInline
-              controls
-              loop
-              crossOrigin="anonymous"
-            />
-            <canvas
-              ref={canvasRef}
-              className="pointer-events-none absolute inset-0 h-full w-full"
-              style={{ pointerEvents: "none" }}
-            />
-          </>
-        ) : null}
-        {hasVideo && !modelReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2">
-              <motion.div
-                className="h-4 w-4 rounded-full border-2 border-white/20 border-t-emerald-400"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
-              />
-              <span className="text-xs text-white/60">Loading detection model…</span>
+      <>
+        <div className="relative h-full w-full overflow-hidden bg-black">
+          {personCount > 0 && (
+            <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              <span className="rounded-full border border-emerald-400/25 bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-sm">
+                {personCount} people
+              </span>
             </div>
-          </div>
+          )}
+          {hasVideo ? (
+            <>
+              <video
+                ref={videoRef}
+                key={videoUrl}
+                data-live-frame-capture=""
+                data-analysis-url={videoUrl ?? ""}
+                className="h-full w-full object-cover"
+                src={videoUrl}
+                autoPlay
+                muted
+                playsInline
+                loop
+                crossOrigin="anonymous"
+              />
+              <canvas
+                ref={canvasRef}
+                className="pointer-events-none absolute inset-0 h-full w-full"
+                style={{ pointerEvents: "none" }}
+              />
+            </>
+          ) : null}
+          {hasVideo && !modelReady && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2">
+                <motion.div
+                  className="h-4 w-4 rounded-full border-2 border-white/20 border-t-emerald-400"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                />
+                <span className="text-xs text-white/60">Loading detection model…</span>
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Expanded fullscreen modal — shares existing tracks, no regeneration */}
+        {expanded && hasVideo && typeof document !== "undefined" && createPortal(
+          <ExpandedARModal
+            videoUrl={videoUrl!}
+            tracksRef={tracksRef}
+            highlightIdRef={highlightIdRef}
+            geminiStatus={geminiStatus.current}
+            expandedVideoRef={expandedVideoRef}
+            expandedCanvasRef={expandedCanvasRef}
+            expandedRafRef={expandedRafRef}
+            personCount={personCount}
+            sceneDescription={sceneDescription}
+            onClose={() => setExpanded(false)}
+          />,
+          document.body,
         )}
-        {sceneDescription && (
-          <div className="absolute bottom-12 left-3 right-3 z-20">
-            <p className="rounded-lg bg-black/70 px-3 py-1.5 text-[11px] text-white/60 backdrop-blur-sm">
-              {sceneDescription}
-            </p>
-          </div>
-        )}
-      </div>
+      </>
     );
   }
 

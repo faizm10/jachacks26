@@ -1,5 +1,6 @@
 "use client";
 
+import { ARLabelsOverlay } from "@/components/panels/ar-labels-overlay";
 import { GlassPanel } from "@/components/ui/glass-panel";
 import { SectionHeader } from "@/components/panels/section-header";
 import { useActiveVideo } from "@/components/room-intel/active-video-context";
@@ -90,14 +91,13 @@ function MediaExpandModal({ obj, onClose }: { obj: CamsLatestObject; onClose: ()
         </div>
         <div className="flex min-h-0 flex-1 items-center justify-center bg-black/50 p-3 sm:p-5">
           {obj.kind === "video" ? (
-            <video
-              className="max-h-[min(78vh,760px)] w-full rounded-lg object-contain"
-              src={obj.url}
-              controls
-              playsInline
-              autoPlay
-              muted
-            />
+            <div className="relative w-full max-h-[min(78vh,760px)] aspect-video rounded-lg overflow-hidden">
+              <ARLabelsOverlay
+                videoUrl={obj.url}
+                persons={[]}
+                inline
+              />
+            </div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -113,110 +113,132 @@ function MediaExpandModal({ obj, onClose }: { obj: CamsLatestObject; onClose: ()
   );
 }
 
+type AnalysisStatus = "idle" | "sending" | "done" | "failed";
+
 function VideoTile({
   obj,
   isFloorActive,
-  isLiveSelected,
   onPick,
   onExpand,
 }: {
   obj: CamsLatestObject;
   isFloorActive: boolean;
-  isLiveSelected: boolean;
   onPick: (o: CamsLatestObject) => void;
+  /** Used for image expand only */
   onExpand: (o: CamsLatestObject) => void;
 }) {
   const [errored, setErrored] = useState(false);
+  const [arExpanded, setArExpanded] = useState(false);
+  const [desc, setDesc] = useState("");
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>("idle");
+  const [retryKey, setRetryKey] = useState(0);
   const fileName = obj.path.split("/").pop() ?? obj.path;
+  const isVideo = obj.kind === "video";
 
-  const borderClass =
-    isFloorActive && isLiveSelected
-      ? "border-emerald-400/45 border-sky-400/45 shadow-[0_0_0_1px_rgba(56,189,248,0.15),0_0_20px_rgba(52,211,153,0.12)]"
-      : isFloorActive
-        ? "border-sky-400/50 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_8px_32px_rgba(0,0,0,0.4)]"
-        : isLiveSelected
-          ? "border-emerald-400/40 shadow-[0_0_20px_rgba(52,211,153,0.12)] ring-1 ring-emerald-400/25"
-          : "border-white/[0.06] hover:border-white/[0.18] hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]";
+  const handleSceneDescription = useCallback((d: string, status: AnalysisStatus) => {
+    setDesc(d);
+    setAnalysisStatus(status);
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    setAnalysisStatus("idle");
+    setDesc("");
+    setRetryKey((k) => k + 1);
+  }, []);
+
+  const borderClass = isFloorActive
+    ? "border-sky-400/50 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_8px_32px_rgba(0,0,0,0.4)]"
+    : "border-white/[0.06] hover:border-white/[0.18] hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]";
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onPick(obj)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onPick(obj);
-        }
-      }}
-      onDoubleClick={() => onExpand(obj)}
-      className={`group relative w-full cursor-pointer overflow-hidden rounded-2xl border bg-black/40 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-white/25 ${borderClass}`}
-    >
-      <div className="aspect-video min-h-[11.5rem] w-full bg-black sm:min-h-[13rem] lg:min-h-[14.5rem]">
-        {!errored ? (
-          obj.kind === "video" ? (
-            <video
-              key={obj.url}
-              className="h-full w-full object-cover"
-              src={obj.url}
-              autoPlay
-              muted
-              playsInline
-              loop
-              onError={() => setErrored(true)}
-            />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={obj.url}
-              alt={fileName}
-              src={obj.url}
-              className="h-full w-full object-cover"
-              onError={() => setErrored(true)}
-            />
-          )
-        ) : (
-          <div className="flex h-full w-full items-center justify-center gap-2">
-            <Clapperboard className="h-7 w-7 text-white/25" />
-            <p className="text-xs text-white/40">Failed to load</p>
-          </div>
-        )}
-      </div>
-
-      <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-1">
-        {isFloorActive ? (
-          <span className="rounded-full border border-sky-400/40 bg-sky-500/25 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">
-            Floor map
-          </span>
-        ) : null}
-        {isLiveSelected ? (
-          <span className="rounded-full border border-emerald-400/35 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-200">
-            Live AI
-          </span>
-        ) : null}
-      </div>
-
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onExpand(obj);
+    <div className="flex flex-col gap-0">
+      {/* Tile */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onPick(obj)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onPick(obj);
+          }
         }}
-        className="absolute right-2 top-2 rounded-lg border border-white/15 bg-black/60 px-2 py-1 text-[10px] font-semibold text-white/70 backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80 hover:text-white"
+        onDoubleClick={() => isVideo ? setArExpanded(true) : onExpand(obj)}
+        className={`group relative w-full cursor-pointer overflow-hidden rounded-2xl border bg-black/40 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-white/25 ${borderClass}`}
       >
-        ↗
-      </button>
+        <div className="aspect-video min-h-[11.5rem] w-full bg-black sm:min-h-[13rem] lg:min-h-[14.5rem]">
+          {!errored ? (
+            isVideo ? (
+              <ARLabelsOverlay
+                videoUrl={obj.url}
+                persons={[]}
+                inline
+                onSceneDescription={handleSceneDescription}
+                expanded={arExpanded}
+                onExpandedChange={setArExpanded}
+                retryKey={retryKey}
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={obj.url}
+                alt={fileName}
+                src={obj.url}
+                className="h-full w-full object-cover"
+                onError={() => setErrored(true)}
+              />
+            )
+          ) : (
+            <div className="flex h-full w-full items-center justify-center gap-2">
+              <Clapperboard className="h-7 w-7 text-white/25" />
+              <p className="text-xs text-white/40">Failed to load</p>
+            </div>
+          )}
+        </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-3 py-3 sm:px-4 sm:py-3.5">
-        <p className="truncate text-xs font-medium text-white/80 sm:text-[13px]">{fileName}</p>
-        <p className="mt-0.5 text-[10px] text-white/40 opacity-0 transition-opacity group-hover:opacity-100 sm:text-[11px]">
-          {isLiveSelected && isFloorActive
-            ? "Double-click to enlarge · drives floor plan + live analysis"
-            : isLiveSelected
-              ? "Double-click to enlarge · selected for live analysis"
-              : "Click for floor plan · optional live analysis from dashboard"}
-        </p>
+        <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-1">
+          {isFloorActive ? (
+            <span className="rounded-full border border-sky-400/40 bg-sky-500/25 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">
+              Floor map
+            </span>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            isVideo ? setArExpanded(true) : onExpand(obj);
+          }}
+          className="absolute right-2 top-2 rounded-lg border border-white/15 bg-black/60 px-2 py-1 text-[10px] font-semibold text-white/70 backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80 hover:text-white"
+        >
+          ↗
+        </button>
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-3 py-3 sm:px-4 sm:py-3.5">
+          <p className="truncate text-xs font-medium text-white/80 sm:text-[13px]">{fileName}</p>
+        </div>
       </div>
+
+      {/* Description + retry below the tile */}
+      {(desc || analysisStatus === "failed") && (
+        <div className="flex items-start gap-2 rounded-b-xl border border-t-0 border-white/[0.06] bg-white/[0.02] px-3 py-2">
+          {desc ? (
+            <p className="flex-1 text-[11px] leading-relaxed text-white/45">{desc}</p>
+          ) : (
+            <p className="flex-1 text-[11px] text-red-300/70">Analysis failed</p>
+          )}
+          {analysisStatus === "failed" && (
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="shrink-0 rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[10px] font-medium text-white/70 transition-colors hover:bg-white/[0.1] hover:text-white"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -224,11 +246,9 @@ function VideoTile({
 export interface CameraFeedPanelProps {
   selectedUrl?: string | null;
   onSelect?: (obj: CamsLatestObject) => void;
-  /** Rendered below the selected tile — inline AR detection overlay */
-  detectionOverlay?: React.ReactNode;
 }
 
-export function CameraFeedPanel({ selectedUrl, onSelect, detectionOverlay }: CameraFeedPanelProps) {
+export function CameraFeedPanel({ selectedUrl, onSelect }: CameraFeedPanelProps) {
   const bucketName = getCamsBucketName();
   const { selectFromTile, activeVideo } = useActiveVideo();
   const { status, objects, error, refresh } = useCamsAllFeeds();
@@ -293,28 +313,17 @@ export function CameraFeedPanel({ selectedUrl, onSelect, detectionOverlay }: Cam
         </div>
       ) : (
         <>
-          {!selectedUrl && objects.length > 0 && onSelect ? (
-            <p className="mt-2 text-xs text-white/40">Select a feed for live analysis (optional)</p>
-          ) : null}
           <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
             {objects.map((obj) => (
               <VideoTile
                 key={obj.path}
                 obj={obj}
                 isFloorActive={activeVideo?.path === obj.path}
-                isLiveSelected={selectedUrl != null && obj.url === selectedUrl}
                 onPick={handlePick}
                 onExpand={setExpanded}
               />
             ))}
           </div>
-
-          {/* Inline detection overlay for the selected feed */}
-          {detectionOverlay && selectedUrl ? (
-            <div className="mt-5">
-              {detectionOverlay}
-            </div>
-          ) : null}
         </>
       )}
       {expanded ? (

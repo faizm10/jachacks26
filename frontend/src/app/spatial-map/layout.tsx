@@ -1,4 +1,3 @@
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -9,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function SpatialMapLayout({ children }: { children: ReactNode }) {
-  return <DashboardShell topNavTitle="Spatial motion map">{children}</DashboardShell>;
+  return <>{children}</>;
 }
