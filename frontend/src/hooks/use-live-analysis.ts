@@ -43,6 +43,7 @@ export function useLiveAnalysis(
   const runAnalysis = useCallback(async (url: string) => {
     if (inFlight.current) return;
     inFlight.current = true;
+    setAnalysis(null);
     setStatus("analyzing");
     setError(null);
 
@@ -59,6 +60,7 @@ export function useLiveAnalysis(
       }
 
       const data = (await res.json()) as FrameAnalysis;
+      if (frameUrlRef.current !== url) return;
       setAnalysis(data);
       setStatus("ready");
       lastAnalyzedUrl.current = url;
@@ -85,7 +87,7 @@ export function useLiveAnalysis(
 
     try {
       const canvas = document.createElement("canvas");
-      const MAX_W = 640;
+      const MAX_W = 1280;  // higher res → Gemini sees small/distant people more clearly
       const scale = Math.min(1, MAX_W / video.videoWidth);
       canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
       canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
@@ -105,6 +107,7 @@ export function useLiveAnalysis(
       if (!res.ok) return;
 
       const data = (await res.json()) as FrameAnalysis;
+      if (frameUrlRef.current !== url) return;
       setAnalysis({ ...data, frameUrl: url });
       setError(null);
       setStatus("ready");
@@ -118,8 +121,9 @@ export function useLiveAnalysis(
   // Analyze once when the user selects a different feed
   useEffect(() => {
     if (!frameUrl) {
-      // Deselected — reset to idle but keep last analysis visible
       setStatus("idle");
+      setAnalysis(null);
+      lastAnalyzedUrl.current = null;
       return;
     }
     if (frameUrl !== lastAnalyzedUrl.current) {

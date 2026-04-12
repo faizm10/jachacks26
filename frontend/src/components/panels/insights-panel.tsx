@@ -38,7 +38,7 @@ export function InsightsPanel({
           const isSelected = insight.personId != null && insight.personId === selectedPersonId;
           return (
           <motion.li
-            key={insight.id}
+            key={`${insight.id}-${i}`}
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.05 * i, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}

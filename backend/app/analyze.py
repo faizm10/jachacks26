@@ -47,26 +47,35 @@ class FrameAnalysis(BaseModel):
     frameUrl: str
 
 
-ANALYSIS_PROMPT = """Analyze this camera frame. Return a JSON object with exactly this structure (no markdown, no extra text):
+ANALYSIS_PROMPT = """Analyze this camera frame. Your job is to label what EACH person is doing — bounding boxes are used only to identify which person you're describing.
+
+Return a JSON object with EXACTLY this structure (no markdown, no extra text):
 
 {
-  "people_count": <integer>,
+  "people_count": <integer — total visible people>,
   "persons": [
     {
-      "bbox": {"x": <0-1 fraction from left>, "y": <0-1 fraction from top>, "w": <0-1 width>, "h": <0-1 height>},
-      "activity": "<what they are doing, e.g. sitting, standing, talking, typing, walking, reading>",
-      "confidence": <0-1 float>
+      "bbox": {
+        "x": <left edge, fraction 0-1 of image width>,
+        "y": <top edge, fraction 0-1 of image height>,
+        "w": <width, fraction 0-1>,
+        "h": <height, fraction 0-1>
+      },
+      "activity": "<what this specific person is doing, e.g. 'sitting at laptop', 'standing talking to group', 'walking', 'looking at phone', 'eating'>",
+      "confidence": <0.0-1.0>
     }
   ],
-  "scene_description": "<one sentence describing the overall scene>",
-  "activities": ["<list of distinct activities happening in the room>"]
+  "scene_description": "<one sentence: room type, crowd level, dominant activity>",
+  "activities": ["<distinct activities in the room, most common first>"]
 }
 
 Rules:
-- bbox values must be fractions between 0 and 1 relative to image dimensions
-- Be specific about activities (not just "present" — say "typing on laptop", "standing near door", etc.)
-- If no people are visible, return people_count: 0 and empty persons array
-- Always return valid JSON only, no markdown fences"""
+- Include ALL people you can see — do not skip anyone
+- One entry per person — never merge two people into one bbox
+- bbox: x,y = top-left corner; w,h = dimensions — all 0 to 1 fractions
+- Be specific about activity — "sitting at table scrolling phone" not "sitting"
+- If no people: people_count 0, empty persons array
+- Return ONLY valid JSON, no markdown"""
 
 
 def _get_gemini_client() -> genai.Client:
@@ -167,9 +176,10 @@ async def analyze_frame(req: AnalyzeRequest) -> FrameAnalysis:
             timeout=15,
         )
 
-    # 3. Map into our schema
+    # 3. Deduplicate + clamp, then map into our schema
+    raw_persons = _nms_persons(data.get("persons", []))
     persons: list[DetectedPerson] = []
-    for i, p in enumerate(data.get("persons", [])):
+    for i, p in enumerate(raw_persons):
         bbox_raw = p.get("bbox", {})
         persons.append(
             DetectedPerson(
@@ -186,13 +196,52 @@ async def analyze_frame(req: AnalyzeRequest) -> FrameAnalysis:
         )
 
     return FrameAnalysis(
-        peopleCount=data.get("people_count", len(persons)),
+        peopleCount=len(persons),
         persons=persons,
         sceneDescription=data.get("scene_description", ""),
         activities=data.get("activities", []),
         analyzedAt=datetime.now(timezone.utc).isoformat(),
         frameUrl=req.frame_url,
     )
+
+
+def _bbox_iou(a: dict, b: dict) -> float:
+    """IoU between two bbox dicts (x, y, w, h fractions)."""
+    ix1 = max(a["x"], b["x"])
+    iy1 = max(a["y"], b["y"])
+    ix2 = min(a["x"] + a["w"], b["x"] + b["w"])
+    iy2 = min(a["y"] + a["h"], b["y"] + b["h"])
+    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+    union = a["w"] * a["h"] + b["w"] * b["h"] - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _nms_persons(persons: list[dict], iou_thresh: float = 0.50) -> list[dict]:
+    """
+    Greedy NMS: removes heavily overlapping duplicate bboxes from Gemini output.
+    No cap on count — every real person should appear.
+    Also clamps and validates bbox values.
+    """
+    valid = []
+    for p in persons:
+        b = p.get("bbox", {})
+        x = max(0.0, min(1.0, float(b.get("x", 0))))
+        y = max(0.0, min(1.0, float(b.get("y", 0))))
+        w = max(0.0, min(1.0 - x, float(b.get("w", 0))))
+        h = max(0.0, min(1.0 - y, float(b.get("h", 0))))
+        conf = float(p.get("confidence", 0.5))
+        if w < 0.01 or h < 0.01:
+            continue
+        valid.append({**p, "bbox": {"x": x, "y": y, "w": w, "h": h}, "confidence": conf})
+
+    valid.sort(key=lambda p: p["confidence"], reverse=True)
+
+    kept = []
+    for p in valid:
+        # Only suppress if very heavily overlapping (same person double-detected)
+        if not any(_bbox_iou(p["bbox"], k["bbox"]) > iou_thresh for k in kept):
+            kept.append(p)
+    return kept
 
 
 def _parse_gemini_response(raw_text: str) -> dict:
@@ -244,8 +293,9 @@ async def analyze_frame_base64(req: AnalyzeFrameBase64Request) -> FrameAnalysis:
     except asyncio.TimeoutError:
         raise RuntimeError("Gemini analysis timed out after 30s")
 
+    raw_persons = _nms_persons(data.get("persons", []))
     persons: list[DetectedPerson] = []
-    for i, p in enumerate(data.get("persons", [])):
+    for i, p in enumerate(raw_persons):
         bbox_raw = p.get("bbox", {})
         persons.append(
             DetectedPerson(
@@ -262,7 +312,7 @@ async def analyze_frame_base64(req: AnalyzeFrameBase64Request) -> FrameAnalysis:
         )
 
     return FrameAnalysis(
-        peopleCount=data.get("people_count", len(persons)),
+        peopleCount=len(persons),
         persons=persons,
         sceneDescription=data.get("scene_description", ""),
         activities=data.get("activities", []),
