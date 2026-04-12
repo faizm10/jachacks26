@@ -8,6 +8,9 @@ import {
   getCachedGeminiAnalysis,
   setCachedGeminiAnalysis,
   deleteCachedGeminiAnalysis,
+  getCachedTracks,
+  setCachedTracks,
+  type CachedTrack,
 } from "@/lib/analysis-cache";
 import { getActivityLabelTheme, isLockedInActivity } from "@/lib/ar-label-activity-colors";
 import type { DetectedPerson, FrameAnalysis } from "@/lib/types/room";
@@ -485,8 +488,21 @@ export function ARLabelsOverlay({
       const currentTime = video.currentTime;
 
       // Detect when the video loops: time jumps backward — stop running new detections
-      if (currentTime < maxTimeReached - 1 && maxTimeReached > 1) {
+      if (currentTime < maxTimeReached - 1 && maxTimeReached > 1 && !detectionDone) {
         detectionDone = true;
+        // Persist final tracks to IndexedDB so they restore instantly on next visit
+        if (videoUrl && tracksRef.current.length > 0) {
+          const toCache: CachedTrack[] = tracksRef.current
+            .filter((t) => t.age >= MIN_AGE)
+            .map((t) => ({
+              bbox: { ...t.bbox },
+              confidence: t.confidence,
+              activity: t.activity,
+              personId: t.personId,
+              activityConfidence: t.activityConfidence,
+            }));
+          void setCachedTracks(videoUrl, toCache);
+        }
       }
       maxTimeReached = Math.max(maxTimeReached, currentTime);
 
@@ -736,7 +752,7 @@ export function ARLabelsOverlay({
     };
   }, [videoUrl, hasVideo, analyzeOnce]);
 
-  // Reset tracks + canvas when switching videos (but NOT the analysis cache)
+  // Reset tracks + canvas when switching videos, then restore from IndexedDB if available
   useEffect(() => {
     tracksRef.current = [];
     inFlight.current = false;
@@ -752,6 +768,28 @@ export function ARLabelsOverlay({
       cachedGeminiPersons.current = [];
       setGeminiStatus("idle");
       setSceneDescription("");
+    }
+
+    // Restore cached COCO-SSD tracks so boxes appear instantly
+    if (videoUrl) {
+      let cancelled = false;
+      getCachedTracks(videoUrl).then((cached) => {
+        if (cancelled || !cached || cached.length === 0) return;
+        // Only restore if we still have no tracks (detection hasn't started yet)
+        if (tracksRef.current.length > 0) return;
+        tracksRef.current = cached.map((c) => ({
+          bbox: { ...c.bbox },
+          confidence: c.confidence,
+          missedFrames: 0,
+          age: MIN_AGE + 1, // mature enough to display immediately
+          activity: c.activity,
+          personId: c.personId,
+          activityConfidence: c.activityConfidence,
+        }));
+        setPersonCountInternal(cached.length);
+        setLockedInChip(cached.some((t) => t.activity !== "detected" && isLockedInActivity(t.activity)));
+      });
+      return () => { cancelled = true; };
     }
   }, [videoUrl]);
 

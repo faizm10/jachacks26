@@ -6,9 +6,10 @@
 import type { FrameAnalysis, DetectedPerson } from "@/lib/types/room";
 
 const DB_NAME = "room-intel-analysis";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_LIVE = "live-analysis";
 const STORE_GEMINI = "gemini-analysis";
+const STORE_TRACKS = "coco-tracks";
 /** Cache entries older than this are ignored. */
 const MAX_AGE_MS = 1000 * 60 * 60 * 4; // 4 hours
 
@@ -34,6 +35,9 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_GEMINI)) {
         db.createObjectStore(STORE_GEMINI);
       }
+      if (!db.objectStoreNames.contains(STORE_TRACKS)) {
+        db.createObjectStore(STORE_TRACKS);
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -43,6 +47,7 @@ function openDB(): Promise<IDBDatabase> {
 async function getFromStore<T>(storeName: string, key: string): Promise<T | null> {
   try {
     const db = await openDB();
+    if (!db.objectStoreNames.contains(storeName)) return null;
     return new Promise((resolve) => {
       const tx = db.transaction(storeName, "readonly");
       const store = tx.objectStore(storeName);
@@ -58,6 +63,7 @@ async function getFromStore<T>(storeName: string, key: string): Promise<T | null
 async function putInStore<T>(storeName: string, key: string, value: T): Promise<void> {
   try {
     const db = await openDB();
+    if (!db.objectStoreNames.contains(storeName)) return;
     const tx = db.transaction(storeName, "readwrite");
     tx.objectStore(storeName).put(value, key);
   } catch {
@@ -68,6 +74,7 @@ async function putInStore<T>(storeName: string, key: string, value: T): Promise<
 async function deleteFromStore(storeName: string, key: string): Promise<void> {
   try {
     const db = await openDB();
+    if (!db.objectStoreNames.contains(storeName)) return;
     const tx = db.transaction(storeName, "readwrite");
     tx.objectStore(storeName).delete(key);
   } catch {
@@ -109,4 +116,34 @@ export async function setCachedGeminiAnalysis(
 
 export async function deleteCachedGeminiAnalysis(url: string): Promise<void> {
   await deleteFromStore(STORE_GEMINI, url);
+}
+
+// ── COCO-SSD tracks cache (ARLabelsOverlay bounding boxes) ──
+
+export interface CachedTrack {
+  bbox: { x: number; y: number; w: number; h: number };
+  confidence: number;
+  activity: string;
+  personId: string | null;
+  activityConfidence?: number;
+}
+
+interface TracksCacheEntry {
+  tracks: CachedTrack[];
+  ts: number;
+}
+
+export async function getCachedTracks(url: string): Promise<CachedTrack[] | null> {
+  const entry = await getFromStore<TracksCacheEntry>(STORE_TRACKS, url);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > MAX_AGE_MS) return null;
+  return entry.tracks;
+}
+
+export async function setCachedTracks(url: string, tracks: CachedTrack[]): Promise<void> {
+  await putInStore(STORE_TRACKS, url, { tracks, ts: Date.now() });
+}
+
+export async function deleteCachedTracks(url: string): Promise<void> {
+  await deleteFromStore(STORE_TRACKS, url);
 }

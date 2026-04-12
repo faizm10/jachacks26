@@ -10,7 +10,9 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar open={open} onNavigate={() => setOpen(false)} />
-      <main className="relative flex-1 bg-background px-4 py-6 sm:px-6 lg:px-8">
+      <main
+        className="relative flex-1 bg-background px-4 pb-6 sm:px-6 lg:px-8"
+        style={{ paddingTop: "10rem" }}>
         <div
           className="pointer-events-none absolute inset-0 opacity-40"
           aria-hidden
