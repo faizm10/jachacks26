@@ -1,11 +1,11 @@
-# Room Intelligence
+# Foco
 
 🏛️ Real-time spatial awareness surface. See how a room is being used — live camera feeds, AI-powered occupancy analysis, and an interactive 3D model of the library.
 
 ---
 
 <p align="center">
-  <img src="./image.png" width="780" alt="Room Intelligence — product preview" />
+  <img src="./image.png" width="780" alt="Foco — product preview" />
 </p>
 
 ---

@@ -15,7 +15,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5">
           <LogoMark className="h-8 w-8" />
-          <span className="text-sm font-semibold tracking-tight text-white">Room Intelligence</span>
+          <span className="text-sm font-semibold tracking-tight text-white">Foco</span>
         </Link>
         <Link
           href="/dashboard"

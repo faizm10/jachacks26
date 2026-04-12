@@ -15,11 +15,13 @@ export function FloorOverviewPanel({
   highlightRoomId,
   onRoomClick,
   livePersons,
+  pulseRoomIds,
 }: {
   cameraRegion: CameraRegion | null;
   highlightRoomId?: string | null;
   onRoomClick?: (roomId: string | null) => void;
   livePersons?: LivePersonBar[];
+  pulseRoomIds?: string[] | null;
 }) {
   const [visual, setVisual] = useState<FloorHeroVisual>("mesh");
 
@@ -87,7 +89,7 @@ export function FloorOverviewPanel({
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         {visual === "mesh" ? (
-          <JohnAbbottLibraryFloorThree layoutVariant="stackedEmbed" fillColumn className="min-h-0 flex-1" highlightRoomId={highlightRoomId} livePersons={livePersons} onRoomClick={onRoomClick} />
+          <JohnAbbottLibraryFloorThree layoutVariant="stackedEmbed" fillColumn className="min-h-0 flex-1" highlightRoomId={highlightRoomId} livePersons={livePersons} onRoomClick={onRoomClick} pulseRoomIds={pulseRoomIds} />
         ) : (
           <PointCloudFloorPlan fillColumn className="min-h-0 flex-1" />
         )}

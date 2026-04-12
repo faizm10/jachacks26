@@ -20,7 +20,7 @@ export function ProductPreview() {
               <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
             </div>
             <span className="ml-2 text-[11px] font-medium tracking-wide text-white/35">
-              room-intelligence · live session
+              foco · live session
             </span>
           </div>
           <div className="grid gap-3 p-4 sm:grid-cols-[1.1fr_0.9fr] sm:p-5">

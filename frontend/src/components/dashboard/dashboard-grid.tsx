@@ -25,7 +25,19 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [clickedRoomId, setClickedRoomId] = useState<string | null>(null);
 
-  const { bars: livePersons } = useLiveFloorBars();
+  const { bars: livePersons, regions } = useLiveFloorBars({ autoAssign: true });
+
+  // Rooms currently being analyzed → yellow pulse on model
+  const pulseRoomIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const r of regions) {
+      if (r.status === "analyzing") {
+        const prefix = r.floor === "f1" ? "1st floor" : "Basement";
+        for (const roomId of r.roomIds) ids.push(`${prefix} · ${roomId}`);
+      }
+    }
+    return ids.length > 0 ? ids : null;
+  }, [regions]);
 
   const handleSelect = useCallback(
     (obj: { url: string; path?: string }) => {
@@ -69,6 +81,7 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
             highlightRoomId={activeRoomId}
             onRoomClick={handleRoomClick}
             livePersons={livePersons}
+            pulseRoomIds={pulseRoomIds}
           />
         </motion.div>
         <motion.div variants={block} className="lg:col-span-5">

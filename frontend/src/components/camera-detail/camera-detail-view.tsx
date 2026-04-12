@@ -1,26 +1,23 @@
 "use client";
 
 import { ARLabelsOverlay } from "@/components/panels/ar-labels-overlay";
-import { CalibrationCard } from "@/components/camera-detail/calibration-card";
 import { GlassPanel } from "@/components/ui/glass-panel";
 import { SectionHeader } from "@/components/panels/section-header";
 import { JohnAbbottLibraryFloorThree } from "@/components/spatial-map/john-abbott-library-floor-three";
 import type { FocusRegion } from "@/components/spatial-map/john-abbott-library-floor-three";
 import { useCamsAllFeeds } from "@/hooks/use-cams-all-feeds";
 import { useLiveAnalysis } from "@/hooks/use-live-analysis";
+import { getCachedBars } from "@/hooks/use-live-floor-bars";
 import { getCameraRoomMapping } from "@/lib/camera-regions";
-import type { CorridorCalibration } from "@/lib/api/calibration";
 import type { CamsLatestObject } from "@/lib/supabase/cams-bucket";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import type { RefObject } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export function CameraDetailView({ cameraId }: { cameraId: string }) {
   const { objects, status } = useCamsAllFeeds();
-  const [calibration, setCalibration] = useState<CorridorCalibration | null>(null);
-  const [calLoading, setCalLoading] = useState(true);
   const [videoRef, setVideoRef] = useState<RefObject<HTMLVideoElement | null> | null>(null);
 
   // Find the matching camera feed object
@@ -46,38 +43,6 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
     setVideoRef(ref);
   }, []);
 
-  // Fetch calibration from backend
-  useEffect(() => {
-    let cancelled = false;
-    setCalLoading(true);
-
-    const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
-    if (!base) {
-      setCalLoading(false);
-      return;
-    }
-
-    fetch(`${base}/calibrations`)
-      .then((r) => r.json())
-      .then((data: { calibrations: CorridorCalibration[] }) => {
-        if (cancelled) return;
-        const match = data.calibrations.find(
-          (c) => c.camera_id.toLowerCase() === cameraId.toLowerCase(),
-        );
-        setCalibration(match ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setCalibration(null);
-      })
-      .finally(() => {
-        if (!cancelled) setCalLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [cameraId]);
-
   // Build focusRegion from predefined camera → room mapping
   const roomMapping = useMemo(() => getCameraRoomMapping(cameraId), [cameraId]);
 
@@ -88,6 +53,15 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
       roomIds: roomMapping.roomIds,
       label: roomMapping.zone,
     };
+  }, [roomMapping]);
+
+  // Read cached bars from the landing page analysis (no re-fetch)
+  const livePersons = useMemo(() => {
+    const all = getCachedBars();
+    if (!roomMapping || all.length === 0) return undefined;
+    const roomSet = new Set(roomMapping.roomIds);
+    const filtered = all.filter((b) => roomSet.has(b.roomId));
+    return filtered.length > 0 ? filtered : undefined;
   }, [roomMapping]);
 
   const label = cameraId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -103,7 +77,7 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
       <div className="flex items-center gap-3">
         <Link
           href="/#camera-feed"
-          className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white/90"
+          className="flex items-center gap-1.5 rounded-xl border border-white/8 bg-white/4 px-3 py-1.5 text-xs font-medium text-white/60 transition-colors hover:bg-white/8 hover:text-white/90"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back
@@ -131,7 +105,7 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
         />
 
         {status === "loading" ? (
-          <div className="flex min-h-[300px] items-center justify-center rounded-xl border border-white/[0.06] bg-black/40">
+          <div className="flex min-h-[300px] items-center justify-center rounded-xl border border-white/6 bg-black/40">
             <motion.div
               className="h-8 w-8 rounded-full border-2 border-white/15 border-t-white/70"
               animate={{ rotate: 360 }}
@@ -139,14 +113,14 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
             />
           </div>
         ) : !feed ? (
-          <div className="flex min-h-[300px] flex-col items-center justify-center gap-2 rounded-xl border border-white/[0.06] bg-black/40 text-center">
+          <div className="flex min-h-[300px] flex-col items-center justify-center gap-2 rounded-xl border border-white/6 bg-black/40 text-center">
             <p className="text-sm font-medium text-white/60">Camera not found</p>
             <p className="max-w-sm text-xs text-white/40">
               No feed matching &ldquo;{cameraId}&rdquo; was found in the storage bucket.
             </p>
           </div>
         ) : isVideo ? (
-          <div className="relative w-full overflow-hidden rounded-xl border border-white/[0.06]" style={{ aspectRatio: "16 / 9" }}>
+          <div className="relative w-full overflow-hidden rounded-xl border border-white/6" style={{ aspectRatio: "16 / 9" }}>
             <ARLabelsOverlay
               videoUrl={feed.url}
               persons={analysis?.persons ?? []}
@@ -158,7 +132,7 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
             />
           </div>
         ) : (
-          <div className="relative w-full overflow-hidden rounded-xl border border-white/[0.06]">
+          <div className="relative w-full overflow-hidden rounded-xl border border-white/6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img alt={label} src={feed.url} className="w-full object-contain" />
           </div>
@@ -166,61 +140,45 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
 
         {/* Scene description */}
         {analysis?.sceneDescription ? (
-          <p className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[11px] leading-relaxed text-white/50">
+          <p className="mt-3 rounded-lg border border-white/6 bg-white/2 px-3 py-2 text-[11px] leading-relaxed text-white/50">
             {analysis.sceneDescription}
           </p>
         ) : null}
       </GlassPanel>
 
-      {/* ═══ CALIBRATION + 3D FLOOR MAP side by side ═══ */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          {calLoading ? (
-            <GlassPanel className="flex min-h-[200px] items-center justify-center p-5">
-              <motion.div
-                className="h-6 w-6 rounded-full border-2 border-white/15 border-t-white/70"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
-              />
-            </GlassPanel>
-          ) : (
-            <CalibrationCard calibration={calibration} />
-          )}
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-        >
-          <GlassPanel className="p-5">
-            <SectionHeader
-              title={roomMapping ? `3D floor map — ${roomMapping.zone}` : "3D floor map"}
-              subtitle={
-                roomMapping
-                  ? `${roomMapping.floor === "f1" ? "1st floor" : "Basement"} · rooms ${roomMapping.roomIds.join(", ")}`
-                  : "Full building view"
-              }
-              action={
-                roomMapping ? (
-                  <span className="rounded-full border border-orange-400/25 bg-orange-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-orange-200/90">
-                    {roomMapping.zone}
+      {/* ═══ 3D FLOOR MAP — zoomed to this camera's region ═══ */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <GlassPanel className="p-5">
+          <SectionHeader
+            title={roomMapping ? `Floor map — ${roomMapping.zone}` : "Floor map"}
+            subtitle={
+              roomMapping
+                ? `${roomMapping.floor === "f1" ? "1st floor" : "Basement"} · rooms ${roomMapping.roomIds.join(", ")}`
+                : "Full building view"
+            }
+            action={
+              livePersons && livePersons.length > 0 ? (
+                <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   </span>
-                ) : null
-              }
-            />
-            <JohnAbbottLibraryFloorThree
-              showHexColumns={false}
-              focusRegion={focusRegion}
-              className="mt-2"
-            />
-          </GlassPanel>
-        </motion.div>
-      </div>
+                  {livePersons.length} mapped
+                </span>
+              ) : null
+            }
+          />
+          <JohnAbbottLibraryFloorThree
+            focusRegion={focusRegion}
+            livePersons={livePersons}
+            className="mt-2"
+          />
+        </GlassPanel>
+      </motion.div>
     </motion.div>
   );
 }

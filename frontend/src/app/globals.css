@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Dark-first palette — matches Room Intelligence glass UI (shadcn tokens aligned) */
+/* Dark-first palette — matches Foco glass UI (shadcn tokens aligned) */
 :root {
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-fill: rgba(255, 255, 255, 0.04);

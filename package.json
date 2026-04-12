@@ -1,5 +1,5 @@
 {
-  "name": "room-intelligence",
+  "name": "foco",
   "private": true,
   "description": "Monorepo: Next.js app in frontend/, Python API in backend/",
   "scripts": {

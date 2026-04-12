@@ -51,7 +51,7 @@ export function Sidebar({
         <div className="flex items-center gap-3 px-5 py-4">
           <LogoMark />
           <div>
-            <p className="text-sm font-semibold tracking-tight text-white">Room Intelligence</p>
+            <p className="text-sm font-semibold tracking-tight text-white">Foco</p>
             <p className="text-[11px] font-medium text-white/40">Control surface</p>
           </div>
         </div>
@@ -88,7 +88,7 @@ export function Sidebar({
           {/* Logo */}
           <div className="flex items-center gap-2 px-2 pr-3">
             <LogoMark className="h-6 w-6" />
-            <span className="text-[13px] font-semibold tracking-tight text-white/70">RI</span>
+            <span className="text-[13px] font-semibold tracking-tight text-white/70">Foco</span>
           </div>
 
           <div className="h-5 w-px bg-white/8" />

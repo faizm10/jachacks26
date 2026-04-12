@@ -25,7 +25,7 @@ export function TopNav({
             </svg>
           </button>
           <p className="text-sm font-semibold tracking-tight text-white lg:hidden">
-            Room Intelligence
+            Foco
           </p>
         </div>
         <nav className="flex items-center gap-2">

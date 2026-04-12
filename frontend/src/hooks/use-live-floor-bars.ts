@@ -91,13 +91,69 @@ export interface UseLiveFloorBarsResult {
   activeRoomIds: string[];
 }
 
-export function useLiveFloorBars(): UseLiveFloorBarsResult {
-  const [bars, setBars] = useState<LivePersonBar[]>([]);
-  const [regions, setRegions] = useState<MappableRegion[]>(DEFAULT_REGIONS);
-  const [cams, setCams] = useState<CamOption[]>([]);
-  const [camsLoading, setCamsLoading] = useState(true);
+/** Module-level cache so bars survive page navigations without re-fetching. */
+const STORAGE_KEY = "foco:live-bars";
+
+function loadFromStorage(): LivePersonBar[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as LivePersonBar[];
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveToStorage(bars: LivePersonBar[]) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(bars)); } catch { /* ignore */ }
+}
+
+let _cachedBars: LivePersonBar[] = loadFromStorage();
+let _cachedRegions: MappableRegion[] = [...DEFAULT_REGIONS];
+let _cachedCams: CamOption[] = [];
+let _camsLoaded = false;
+
+// If we restored bars from storage, mark matching regions as done
+if (_cachedBars.length > 0) {
+  const barRoomIds = new Set(_cachedBars.map((b) => b.roomId));
+  _cachedRegions = _cachedRegions.map((r) => {
+    if (r.hardcoded) return r;
+    const hasData = r.roomIds.some((id) => barRoomIds.has(id));
+    if (hasData) return { ...r, status: "done" as const, assignedVideo: "(cached)" };
+    return r;
+  });
+}
+
+/** Read-only access to cached bars (for camera detail pages etc). */
+export function getCachedBars(): LivePersonBar[] {
+  return _cachedBars;
+}
+
+export function useLiveFloorBars(opts?: { autoAssign?: boolean }): UseLiveFloorBarsResult {
+  const autoAssign = opts?.autoAssign ?? false;
+  const [bars, _setBars] = useState<LivePersonBar[]>(_cachedBars);
+  const [regions, _setRegions] = useState<MappableRegion[]>(_cachedRegions);
+  const [cams, setCams] = useState<CamOption[]>(_cachedCams);
+  const [camsLoading, setCamsLoading] = useState(!_camsLoaded);
   const [activeRegionId, setActiveRegionId] = useState<string | null>(null);
-  const fetchedCams = useRef(false);
+  const fetchedCams = useRef(_camsLoaded);
+
+  // Wrappers that sync module-level cache
+  const setBars: typeof _setBars = useCallback((action) => {
+    _setBars((prev) => {
+      const next = typeof action === "function" ? action(prev) : action;
+      _cachedBars = next;
+      saveToStorage(next);
+      return next;
+    });
+  }, []);
+  const setRegions: typeof _setRegions = useCallback((action) => {
+    _setRegions((prev) => {
+      const next = typeof action === "function" ? action(prev) : action;
+      _cachedRegions = next;
+      return next;
+    });
+  }, []);
 
   // Fetch available cameras once
   useEffect(() => {
@@ -115,11 +171,28 @@ export function useLiveFloorBars(): UseLiveFloorBarsResult {
             url: o.url,
             path: o.path,
           }));
+        _cachedCams = videoOptions;
+        _camsLoaded = true;
         setCams(videoOptions);
         setCamsLoading(false);
+
+        // Auto-assign default videos if enabled (dashboard context)
+        if (autoAssign) {
+          const hallTest = videoOptions.find((c) => c.name === "hall-test");
+          const basement = videoOptions.find((c) => c.name === "basement-2mov");
+          if (hallTest || basement) {
+            setRegions((prev) =>
+              prev.map((r) => {
+                if (r.id === "main-hall" && hallTest && !r.assignedVideo) return { ...r, assignedVideo: hallTest.name };
+                if (r.id === "open-study" && basement && !r.assignedVideo) return { ...r, assignedVideo: basement.name };
+                return r;
+              }),
+            );
+          }
+        }
       })
       .catch(() => setCamsLoading(false));
-  }, []);
+  }, [autoAssign, setRegions]);
 
   // Run analysis when a region gets a new assignment
   const analyzeRegion = useCallback(

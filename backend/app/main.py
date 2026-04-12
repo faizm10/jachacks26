@@ -25,7 +25,7 @@ from app.floorplan import (
     analyze_from_url,
 )
 
-app = FastAPI(title="Room Intelligence API")
+app = FastAPI(title="Foco API")
 
 _origins = os.environ.get(
     "CORS_ALLOW_ORIGINS",

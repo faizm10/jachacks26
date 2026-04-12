@@ -38,7 +38,7 @@ export function Hero() {
         variants={item}
         className="mt-5 text-balance text-4xl font-semibold tracking-tight text-white sm:text-5xl sm:leading-[1.08]"
       >
-        Room Intelligence
+        Foco
       </motion.h1>
       <motion.p
         variants={item}

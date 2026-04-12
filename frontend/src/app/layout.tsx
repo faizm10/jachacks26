@@ -25,8 +25,8 @@ const playfairDisplay = Playfair_Display({
 
 export const metadata: Metadata = {
   title: {
-    default: "Room Intelligence",
-    template: "%s · Room Intelligence",
+    default: "Foco",
+    template: "%s · Foco",
   },
   description:
     "Understand how a room is being used in real time — a calm, premium spatial awareness surface.",
