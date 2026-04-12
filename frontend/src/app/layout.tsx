@@ -1,3 +1,4 @@
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Caveat } from "next/font/google";
 import "./globals.css";
@@ -36,7 +37,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${caveat.variable} min-h-screen bg-background antialiased text-foreground`}
       >
-        {children}
+        <DashboardShell>{children}</DashboardShell>
       </body>
     </html>
   );

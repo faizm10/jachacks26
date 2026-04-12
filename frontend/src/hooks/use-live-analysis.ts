@@ -1,16 +1,19 @@
 "use client";
 
 import type { FrameAnalysis } from "@/lib/types/room";
+import type { RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type AnalysisStatus = "idle" | "analyzing" | "ready" | "error";
 
 export interface UseLiveAnalysisOptions {
   /**
-   * When set, periodically captures `[data-live-frame-capture]` (AR labels video)
-   * and POSTs `/api/analyze-frame` so insights + behavior heatmap track playback in near real time.
+   * When set, periodically captures the video element and POSTs `/api/analyze-frame`
+   * so insights + behavior heatmap track playback in near real time.
    */
   realtimeFrameCaptureMs?: number;
+  /** Ref to the specific video element to capture frames from. Required for per-tile analysis. */
+  videoRef?: RefObject<HTMLVideoElement | null>;
 }
 
 export interface UseLiveAnalysisResult {
@@ -39,6 +42,7 @@ export function useLiveAnalysis(
   const frameCaptureInFlight = useRef(false);
 
   const realtimeMs = options?.realtimeFrameCaptureMs ?? 0;
+  const videoElRef = options?.videoRef ?? null;
 
   const runAnalysis = useCallback(async (url: string) => {
     if (inFlight.current) return;
@@ -74,11 +78,10 @@ export function useLiveAnalysis(
     const url = frameUrlRef.current;
     if (!url || frameCaptureInFlight.current) return;
 
-    const video = document.querySelector(
-      "video[data-live-frame-capture]",
-    ) as HTMLVideoElement | null;
+    const video = videoElRef?.current
+      ?? document.querySelector("video[data-live-frame-capture]") as HTMLVideoElement | null;
     if (!video) return;
-    if (video.dataset.analysisUrl !== url) return;
+    if (!videoElRef && video.dataset.analysisUrl !== url) return;
     if (video.readyState < 2) return;
     if (video.paused) return;
 
