@@ -1,9 +1,10 @@
 "use client";
 
 import { ARLabelsOverlay } from "@/components/panels/ar-labels-overlay";
+import { ArLabelColorLegend } from "@/components/panels/ar-label-color-legend";
+import { BuildingVibePanel } from "@/components/panels/building-vibe-panel";
 import { CameraFeedPanel } from "@/components/panels/camera-feed-panel";
-import { HeatmapPanel } from "@/components/panels/heatmap-panel";
-import { InsightsPanel } from "@/components/panels/insights-panel";
+import { FloorOverviewPanel } from "@/components/panels/floor-overview-panel";
 import { useLiveAnalysis } from "@/hooks/use-live-analysis";
 import {
   buildActivityHeatmapFromPersons,
@@ -12,7 +13,6 @@ import {
 import { getCameraRegion } from "@/lib/camera-regions";
 import type { RoomSnapshot } from "@/lib/types/room";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
 const block = {
@@ -25,16 +25,20 @@ const block = {
 };
 
 export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
-  // User-selected feed — analysis only runs when they pick one
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
-  /** Live insights person row → highlight matching bbox on AR / camera area. */
   const [highlightPersonId, setHighlightPersonId] = useState<string | null>(null);
 
   const handleSelect = useCallback(
     (obj: { url: string; path?: string }) => {
       setSelectedUrl((prev) => (prev === obj.url ? null : obj.url));
-      const camId = obj.path?.split("/").pop()?.replace(/\.[^.]+$/, "")?.trim().toLowerCase() ?? null;
+      const camId =
+        obj.path
+          ?.split("/")
+          .pop()
+          ?.replace(/\.[^.]+$/, "")
+          ?.trim()
+          .toLowerCase() ?? null;
       setSelectedCameraId((prev) => (prev === camId ? null : camId));
       setHighlightPersonId(null);
     },
@@ -42,16 +46,16 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
   );
 
   const handlePersonInsightClick = useCallback((personId: string) => {
-    document.getElementById("camera-feed")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document
+      .getElementById("camera-feed")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
     setHighlightPersonId((prev) => (prev === personId ? null : personId));
   }, []);
 
-  // Only analyze the explicitly selected feed
   const { status: analysisStatus, analysis } = useLiveAnalysis(selectedUrl, {
     realtimeFrameCaptureMs: 3200,
   });
 
-  // Merge live analysis into the snapshot when available
   const liveStats = useMemo(() => {
     if (!analysis) return snapshot.stats;
     return {
@@ -61,7 +65,6 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
       ambientDb: snapshot.stats.ambientDb,
     };
   }, [analysis, snapshot.stats]);
-
 
   const liveInsights = useMemo(() => {
     if (!analysis) return snapshot.insights;
@@ -103,9 +106,9 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
   const heatmapSubtitle =
     analysis?.persons && analysis.persons.length > 0
       ? cameraRegion
-        ? `${cameraRegion.label} — perspective-corrected ${cameraRegion.region.w}×${cameraRegion.region.h} region`
-        : "From AI labels — raw camera-space mapping"
-      : "Aggregated movement density (demo)";
+        ? `${cameraRegion.label} — perspective-corrected`
+        : "AI labels — camera-space"
+      : "Select a feed to see activity";
 
   const heatmapPeakCaption = useMemo(() => {
     if (!analysis?.persons?.length) return null;
@@ -122,53 +125,58 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
       }}
       className="mx-auto max-w-7xl space-y-6"
     >
-      <motion.div variants={block} id="camera-feed" className="scroll-mt-24">
-        <CameraFeedPanel selectedUrl={selectedUrl} onSelect={handleSelect} />
-      </motion.div>
-
+      {/* ═══ HERO: Floor map + Building vibe ═══ */}
       <div className="grid gap-6 lg:grid-cols-12">
-        <motion.div variants={block} className="space-y-6 lg:col-span-7">
-          <ARLabelsOverlay
-            videoUrl={selectedUrl}
-            persons={analysis?.persons ?? []}
-            analyzing={analysisStatus === "analyzing"}
-            liveSceneSummary={analysis?.sceneDescription}
-            highlightedPersonId={highlightPersonId}
-          />
-          <HeatmapPanel
+        <motion.div variants={block} className="lg:col-span-7">
+          <FloorOverviewPanel
             cells={behaviorHeatmapCells}
-            subtitle={heatmapSubtitle}
-            peakCaption={analysis?.persons?.length ? heatmapPeakCaption : null}
+            heatmapSubtitle={heatmapSubtitle}
+            peakCaption={heatmapPeakCaption}
             cameraRegion={cameraRegion}
+            activeFloorHint={selectedCameraId}
           />
         </motion.div>
-        <motion.div variants={block} className="space-y-6 lg:col-span-5">
-          <div id="spatial-map" className="scroll-mt-24">
-            <Link
-              href="/spatial-map"
-              className="group flex flex-col rounded-2xl border border-white/[0.1] bg-white/[0.04] p-5 transition-colors hover:border-white/[0.14] hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-sm font-semibold tracking-tight text-white">
-                    Spatial motion map
-                  </h2>
-                  <p className="mt-2 text-sm leading-relaxed text-white/50">
-                    Top-down floor plan canvas with motion heat and zones — clips stay off the map
-                    unless you preview them.
-                  </p>
-                </div>
-                <span className="shrink-0 pt-0.5 text-sm font-medium text-white/45 transition-colors group-hover:text-white/80">
-                  Open →
-                </span>
-              </div>
-            </Link>
+        <motion.div variants={block} className="lg:col-span-5">
+          <BuildingVibePanel stats={liveStats} insights={liveInsights} />
+        </motion.div>
+      </div>
+
+      {/* ═══ CAMERA FEEDS with inline detection overlay ═══ */}
+      <motion.div variants={block} id="admin-section" className="scroll-mt-24">
+        <div className="mb-3 flex items-center gap-2">
+          <div className="h-px flex-1 bg-white/[0.06]" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/25">
+            Camera feeds & detection
+          </span>
+          <div className="h-px flex-1 bg-white/[0.06]" />
+        </div>
+      </motion.div>
+
+      <div className="grid gap-6 lg:grid-cols-12" id="camera-feed">
+        {/* Color legend floated on the left */}
+        <motion.div variants={block} className="lg:col-span-3">
+          <div className="sticky top-24">
+            <ArLabelColorLegend />
           </div>
-          <InsightsPanel
-            stats={liveStats}
-            insights={liveInsights}
-            selectedPersonId={highlightPersonId}
-            onPersonInsightClick={handlePersonInsightClick}
+        </motion.div>
+
+        {/* Camera feeds with inline AR overlay on selected tile */}
+        <motion.div variants={block} className="lg:col-span-9">
+          <CameraFeedPanel
+            selectedUrl={selectedUrl}
+            onSelect={handleSelect}
+            detectionOverlay={
+              selectedUrl ? (
+                <ARLabelsOverlay
+                  videoUrl={selectedUrl}
+                  persons={analysis?.persons ?? []}
+                  analyzing={analysisStatus === "analyzing"}
+                  liveSceneSummary={analysis?.sceneDescription}
+                  highlightedPersonId={highlightPersonId}
+                  inline
+                />
+              ) : null
+            }
           />
         </motion.div>
       </div>

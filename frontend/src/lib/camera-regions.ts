@@ -7,8 +7,14 @@
  */
 
 export type CameraPosition =
-  | "left" | "right" | "top" | "bottom"
-  | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  | "left"
+  | "right"
+  | "top"
+  | "bottom"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
 
 /** The full building heatmap grid size */
 export const BUILDING_GRID_W = 30;
@@ -68,6 +74,12 @@ export const CAMERA_REGIONS: Record<string, CameraRegion> = {
     cameraEdge: "top-left",
     perspective: 0.5,
   },
+  "hall-test-2": {
+    label: "Main hall (test 2)",
+    region: centered(16, 16),
+    cameraEdge: "top-left",
+    perspective: 0.5,
+  },
   "first-floor-entrance": {
     label: "Entrance",
     region: centered(8, 12),
@@ -83,7 +95,10 @@ export const CAMERA_REGIONS: Record<string, CameraRegion> = {
 };
 
 export function getCameraRegion(cameraId: string): CameraRegion | null {
-  const key = cameraId.toLowerCase().replace(/\.[^.]+$/, "").trim();
+  const key = cameraId
+    .toLowerCase()
+    .replace(/\.[^.]+$/, "")
+    .trim();
   if (CAMERA_REGIONS[key]) return CAMERA_REGIONS[key];
   for (const [k, v] of Object.entries(CAMERA_REGIONS)) {
     if (key.includes(k) || k.includes(key)) return v;
@@ -106,12 +121,10 @@ export function cameraToGrid(
 ): { gx: number; gy: number } {
   // Depth cues
   const depthFromY = 1 - camY;
-  const depthFromSize = bboxH != null
-    ? Math.min(1, Math.max(0, 1 - bboxH / 0.5))
-    : depthFromY;
-  const depthRaw = bboxH != null
-    ? depthFromY * 0.3 + depthFromSize * 0.7
-    : depthFromY;
+  const depthFromSize =
+    bboxH != null ? Math.min(1, Math.max(0, 1 - bboxH / 0.5)) : depthFromY;
+  const depthRaw =
+    bboxH != null ? depthFromY * 0.3 + depthFromSize * 0.7 : depthFromY;
   const depth = Math.pow(depthRaw, 0.7);
 
   const p = region.perspective;
@@ -135,7 +148,7 @@ export function cameraToGrid(
       // Depth runs diagonally; horiz sweeps across the perpendicular
       // camX: 0=left edge of view, 1=right edge
       // Near camera: top-left corner. Far: bottom-right area.
-      const diagX = depth;           // 0 = top-left, 1 = bottom-right
+      const diagX = depth; // 0 = top-left, 1 = bottom-right
       const diagY = depth;
       // Spread the perpendicular axis (horiz) with perspective
       const perpX = (horiz - 0.5) * spread;

@@ -80,6 +80,7 @@ export function useLiveAnalysis(
     if (!video) return;
     if (video.dataset.analysisUrl !== url) return;
     if (video.readyState < 2) return;
+    if (video.paused) return;
 
     frameCaptureInFlight.current = true;
 

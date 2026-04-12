@@ -378,6 +378,8 @@ export interface ARLabelsOverlayProps {
   liveSceneSummary?: string | null;
   /** Highlights the bbox whose `personId` matches (from Live insights click). */
   highlightedPersonId?: string | null;
+  /** When true, renders without outer GlassPanel/header/legend (embedded in camera tile) */
+  inline?: boolean;
 }
 
 export function ARLabelsOverlay({
@@ -385,6 +387,7 @@ export function ARLabelsOverlay({
   persons,
   liveSceneSummary,
   highlightedPersonId,
+  inline,
 }: ARLabelsOverlayProps) {
   const latestPersonsRef = useRef<DetectedPerson[]>(persons);
   latestPersonsRef.current = persons;
@@ -423,6 +426,8 @@ export function ARLabelsOverlay({
 
     let lastCountUpdate = 0;
     let lastVideoTime = -1;
+    let detectionDone = false; // true after one full video pass
+    let maxTimeReached = 0;    // highest video time seen
 
     const loop = async () => {
       const video = videoRef.current;
@@ -441,10 +446,17 @@ export function ARLabelsOverlay({
         canvas.height = rect.height;
       }
 
-      // Only re-detect when the video time changes (playing or scrubbed)
       const currentTime = video.currentTime;
-      if (Math.abs(currentTime - lastVideoTime) < 0.01) {
-        // Same frame — just redraw existing tracks, skip detection
+
+      // Detect when the video loops: time jumps backward significantly
+      if (currentTime < maxTimeReached - 1 && maxTimeReached > 1) {
+        detectionDone = true;
+      }
+      maxTimeReached = Math.max(maxTimeReached, currentTime);
+
+      // After one full pass, just redraw existing tracks — no new detection
+      // Also skip if video time hasn't changed (paused)
+      if (detectionDone || Math.abs(currentTime - lastVideoTime) < 0.01) {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           drawTracks(
@@ -663,6 +675,65 @@ export function ARLabelsOverlay({
     }
   }, [videoUrl]);
 
+  // ── Inline mode: just the video + canvas, no wrapper ──
+  if (inline) {
+    return (
+      <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/60">
+        {personCount > 0 && (
+          <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+            <span className="rounded-full border border-emerald-400/25 bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-sm">
+              {personCount} people
+            </span>
+          </div>
+        )}
+        {hasVideo ? (
+          <>
+            <video
+              ref={videoRef}
+              key={videoUrl}
+              data-live-frame-capture=""
+              data-analysis-url={videoUrl ?? ""}
+              className="h-full w-full object-contain"
+              src={videoUrl}
+              autoPlay
+              muted
+              playsInline
+              controls
+              loop
+              crossOrigin="anonymous"
+            />
+            <canvas
+              ref={canvasRef}
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              style={{ pointerEvents: "none" }}
+            />
+          </>
+        ) : null}
+        {hasVideo && !modelReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2">
+              <motion.div
+                className="h-4 w-4 rounded-full border-2 border-white/20 border-t-emerald-400"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+              />
+              <span className="text-xs text-white/60">Loading detection model…</span>
+            </div>
+          </div>
+        )}
+        {sceneDescription && (
+          <div className="absolute bottom-12 left-3 right-3 z-20">
+            <p className="rounded-lg bg-black/70 px-3 py-1.5 text-[11px] text-white/60 backdrop-blur-sm">
+              {sceneDescription}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Full mode: with wrapper, header, legend ──
   return (
     <GlassPanel className="relative overflow-hidden p-5">
       <SectionHeader
@@ -724,6 +795,7 @@ export function ARLabelsOverlay({
               muted
               playsInline
               controls
+              loop
               crossOrigin="anonymous"
             />
             <canvas
@@ -917,6 +989,7 @@ function ExpandedARModal({
               muted
               playsInline
               controls
+              loop
               crossOrigin="anonymous"
             />
             <canvas

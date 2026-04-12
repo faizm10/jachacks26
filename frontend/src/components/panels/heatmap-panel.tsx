@@ -160,34 +160,49 @@ export function HeatmapPanel({
         ctx.textAlign = "left";
         ctx.fillText(region.label, rx + 4, ry - 4);
 
-        // Camera icon (small triangle showing direction)
-        const iconSize = 6;
-        ctx.fillStyle = "rgba(56, 189, 248, 0.7)";
-        ctx.beginPath();
+        // Camera position: orange dot with radial glow
         const edge = region.cameraEdge;
-        if (edge === "left") {
-          const cx = rx - 2, cy = ry + rh / 2;
-          ctx.moveTo(cx, cy - iconSize); ctx.lineTo(cx + iconSize, cy); ctx.lineTo(cx, cy + iconSize);
-        } else if (edge === "right") {
-          const cx = rx + rw + 2, cy = ry + rh / 2;
-          ctx.moveTo(cx, cy - iconSize); ctx.lineTo(cx - iconSize, cy); ctx.lineTo(cx, cy + iconSize);
-        } else if (edge === "top") {
-          const cx = rx + rw / 2, cy = ry - 2;
-          ctx.moveTo(cx - iconSize, cy); ctx.lineTo(cx, cy + iconSize); ctx.lineTo(cx + iconSize, cy);
-        } else if (edge === "bottom") {
-          const cx = rx + rw / 2, cy = ry + rh + 2;
-          ctx.moveTo(cx - iconSize, cy); ctx.lineTo(cx, cy - iconSize); ctx.lineTo(cx + iconSize, cy);
-        } else if (edge === "top-left") {
-          ctx.moveTo(rx - 2, ry - 2); ctx.lineTo(rx + iconSize + 2, ry - 2); ctx.lineTo(rx - 2, ry + iconSize + 2);
-        } else if (edge === "top-right") {
-          ctx.moveTo(rx + rw + 2, ry - 2); ctx.lineTo(rx + rw - iconSize - 2, ry - 2); ctx.lineTo(rx + rw + 2, ry + iconSize + 2);
-        } else if (edge === "bottom-left") {
-          ctx.moveTo(rx - 2, ry + rh + 2); ctx.lineTo(rx + iconSize + 2, ry + rh + 2); ctx.lineTo(rx - 2, ry + rh - iconSize - 2);
-        } else if (edge === "bottom-right") {
-          ctx.moveTo(rx + rw + 2, ry + rh + 2); ctx.lineTo(rx + rw - iconSize - 2, ry + rh + 2); ctx.lineTo(rx + rw + 2, ry + rh - iconSize - 2);
-        }
-        ctx.closePath();
+        let camPx = rx + rw / 2, camPy = ry + rh / 2;
+        if (edge === "left") { camPx = rx; camPy = ry + rh / 2; }
+        else if (edge === "right") { camPx = rx + rw; camPy = ry + rh / 2; }
+        else if (edge === "top") { camPx = rx + rw / 2; camPy = ry; }
+        else if (edge === "bottom") { camPx = rx + rw / 2; camPy = ry + rh; }
+        else if (edge === "top-left") { camPx = rx; camPy = ry; }
+        else if (edge === "top-right") { camPx = rx + rw; camPy = ry; }
+        else if (edge === "bottom-left") { camPx = rx; camPy = ry + rh; }
+        else if (edge === "bottom-right") { camPx = rx + rw; camPy = ry + rh; }
+
+        // Radial glow
+        const glowR = Math.min(rw, rh) * 0.35;
+        const glow = ctx.createRadialGradient(camPx, camPy, 0, camPx, camPy, glowR);
+        glow.addColorStop(0, "rgba(251, 146, 60, 0.45)");
+        glow.addColorStop(0.5, "rgba(251, 146, 60, 0.12)");
+        glow.addColorStop(1, "transparent");
+        ctx.fillStyle = glow;
+        ctx.fillRect(camPx - glowR, camPy - glowR, glowR * 2, glowR * 2);
+
+        // Outer ring
+        ctx.strokeStyle = "rgba(251, 146, 60, 0.5)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(camPx, camPy, 7, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Filled dot
+        ctx.fillStyle = "rgb(251, 146, 60)";
+        ctx.shadowColor = "rgb(251, 146, 60)";
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(camPx, camPy, 4, 0, Math.PI * 2);
         ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // "CAM" label
+        ctx.font = "bold 7px ui-sans-serif, system-ui, sans-serif";
+        ctx.fillStyle = "rgba(251, 146, 60, 0.8)";
+        ctx.textAlign = "center";
+        ctx.fillText("CAM", camPx, camPy - 11);
+        ctx.textAlign = "left";
       }
 
       rafRef.current = requestAnimationFrame(draw);

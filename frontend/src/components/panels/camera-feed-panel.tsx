@@ -224,9 +224,11 @@ function VideoTile({
 export interface CameraFeedPanelProps {
   selectedUrl?: string | null;
   onSelect?: (obj: CamsLatestObject) => void;
+  /** Rendered below the selected tile — inline AR detection overlay */
+  detectionOverlay?: React.ReactNode;
 }
 
-export function CameraFeedPanel({ selectedUrl, onSelect }: CameraFeedPanelProps) {
+export function CameraFeedPanel({ selectedUrl, onSelect, detectionOverlay }: CameraFeedPanelProps) {
   const bucketName = getCamsBucketName();
   const { selectFromTile, activeVideo } = useActiveVideo();
   const { status, objects, error, refresh } = useCamsAllFeeds();
@@ -306,6 +308,13 @@ export function CameraFeedPanel({ selectedUrl, onSelect }: CameraFeedPanelProps)
               />
             ))}
           </div>
+
+          {/* Inline detection overlay for the selected feed */}
+          {detectionOverlay && selectedUrl ? (
+            <div className="mt-5">
+              {detectionOverlay}
+            </div>
+          ) : null}
         </>
       )}
       {expanded ? (
