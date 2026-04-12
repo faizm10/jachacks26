@@ -149,6 +149,126 @@ function generateAllPoints() {
   };
 }
 
+/* ── Heatmap pin from room data ── */
+
+/**
+ * Generate a heat-pin at a specific room location on the basement level.
+ * Uses the actual room geometry from the 3D data to position correctly.
+ *
+ * basement-hallway-1 monitors the west corridor area — rooms 003 + 001 area.
+ */
+function generateHeatPin(yOffset: number) {
+  const positions: number[] = [];
+  const colors: number[] = [];
+
+  // Use actual basement room positions to define the heat area.
+  // basement-hallway-1 covers the corridor area around rooms 003/001/004.
+  // Room 003: x=0, z=0, w=80, d=260 (west corridor)
+  // We place the heat patch inside this corridor, scaled like the rooms.
+  const heatX = 0 * SCALE;
+  const heatZ = 60 * SCALE;
+  const heatW = 80 * SCALE;
+  const heatD = 140 * SCALE;
+
+  const cx = heatX + heatW / 2;
+  const cz = heatZ + heatD / 2;
+
+  const jit = () => (Math.random() - 0.5) * 0.3;
+
+  // ── Ground heat patch: dense points on the floor ──
+  const heatStep = 0.8;
+  for (let x = heatX; x <= heatX + heatW; x += heatStep) {
+    for (let z = heatZ; z <= heatZ + heatD; z += heatStep) {
+      // Heat intensity: hottest at center, fading to edges
+      const dx = (x - cx) / (heatW / 2);
+      const dz = (z - cz) / (heatD / 2);
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const heat = Math.max(0, 1 - dist * 0.7);
+
+      // Color: red-orange-yellow gradient
+      const r = 0.9 + heat * 0.1;
+      const g = 0.15 + heat * 0.55;
+      const b = 0.03 + (1 - heat) * 0.08;
+
+      positions.push(x + jit(), yOffset + 0.5 + jit() * 0.15, z + jit());
+      colors.push(r, g, b);
+
+      // Stacked glow layers
+      if (Math.random() < 0.35) {
+        positions.push(x + jit(), yOffset + 1.5 + Math.random() * 2, z + jit());
+        colors.push(r * 0.7, g * 0.5, b * 0.2);
+      }
+    }
+  }
+
+  // ── Outline of the heat region ──
+  const edgeStep = 0.4;
+  const corners: [number, number][] = [
+    [heatX, heatZ],
+    [heatX + heatW, heatZ],
+    [heatX + heatW, heatZ + heatD],
+    [heatX, heatZ + heatD],
+  ];
+  for (let i = 0; i < corners.length; i++) {
+    const [ax, az] = corners[i];
+    const [bx, bz] = corners[(i + 1) % corners.length];
+    const len = Math.hypot(bx - ax, bz - az);
+    const steps = Math.ceil(len / edgeStep);
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      positions.push(
+        ax + (bx - ax) * t + jit() * 0.5,
+        yOffset + 0.5 + jit() * 0.1,
+        az + (bz - az) * t + jit() * 0.5,
+      );
+      colors.push(1.0, 0.4, 0.08);
+    }
+  }
+
+  // ── Pin column: vertical beam from center ──
+  const pinHeight = 40;
+  const pinStep = 0.5;
+  for (let y = 0; y <= pinHeight; y += pinStep) {
+    const t = y / pinHeight;
+    const radius = 3 * (1 - t * 0.7);
+    const nPts = Math.max(3, Math.floor(10 * (1 - t * 0.5)));
+    for (let i = 0; i < nPts; i++) {
+      const angle = (i / nPts) * Math.PI * 2 + Math.random() * 0.5;
+      const rad = radius * (0.4 + Math.random() * 0.6);
+      positions.push(
+        cx + Math.cos(angle) * rad,
+        yOffset + 0.5 + y + jit() * 0.3,
+        cz + Math.sin(angle) * rad,
+      );
+      const cr = 0.95 - t * 0.45;
+      const cg = 0.3 + t * 0.2;
+      const cb = 0.05 + t * 0.25;
+      colors.push(cr, cg, cb);
+    }
+  }
+
+  // ── Pin head: bright sphere at top ──
+  const headY = yOffset + 0.5 + pinHeight;
+  const headRadius = 5;
+  for (let i = 0; i < 400; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.random() * Math.PI;
+    const r = headRadius * (0.5 + Math.random() * 0.5);
+    positions.push(
+      cx + r * Math.sin(phi) * Math.cos(theta),
+      headY + r * Math.cos(phi),
+      cz + r * Math.sin(phi) * Math.sin(theta),
+    );
+    colors.push(1.0, 0.5, 0.12);
+  }
+
+  return {
+    positions: new Float32Array(positions),
+    colors: new Float32Array(colors),
+    count: positions.length / 3,
+  };
+}
+
 /* ── Three.js scene management ── */
 
 interface SceneCtx {
@@ -156,6 +276,7 @@ interface SceneCtx {
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   points: THREE.Points;
+  heatPin: THREE.Points;
   baseColors: Float32Array;
   floors: LibraryFloorKey[];
   spherical: { theta: number; phi: number; radius: number };
@@ -251,11 +372,31 @@ export function PointCloudFloorPlan({ className }: { className?: string }) {
     const points = new THREE.Points(geo, mat);
     scene.add(points);
 
+    // Heatmap pin on basement level (yOffset = 0 for basement)
+    const pinData = generateHeatPin(0);
+    const pinGeo = new THREE.BufferGeometry();
+    pinGeo.setAttribute("position", new THREE.Float32BufferAttribute(pinData.positions, 3));
+    pinGeo.setAttribute("color", new THREE.Float32BufferAttribute(pinData.colors, 3));
+    const pinMat = new THREE.PointsMaterial({
+      size: POINT_SIZE * 1.4,
+      vertexColors: true,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const heatPin = new THREE.Points(pinGeo, pinMat);
+    scene.add(heatPin);
+
+    setPointCount(data.count + pinData.count);
+
     const ctx: SceneCtx = {
       scene,
       camera,
       renderer,
       points,
+      heatPin,
       baseColors: data.colors,
       floors: data.floors,
       spherical: { theta: 0.6, phi: 0.75, radius: 650 },
@@ -331,6 +472,8 @@ export function PointCloudFloorPlan({ className }: { className?: string }) {
       host.removeEventListener("wheel", onWheel);
       geo.dispose();
       mat.dispose();
+      pinGeo.dispose();
+      pinMat.dispose();
       renderer.dispose();
       ctxRef.current = null;
     };

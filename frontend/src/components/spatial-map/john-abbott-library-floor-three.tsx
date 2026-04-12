@@ -173,6 +173,8 @@ interface ThreeCtx {
   prev: { x: number; y: number };
   /** Video-derived motion heat (RGBA); not used for room raycast. */
   heatOverlay: THREE.Mesh | null;
+  /** Heatmap pin (THREE.Points) on the basement level. */
+  heatPin: THREE.Points | null;
   /** Seconds accumulated for idle orbit + bob (paused while `drag`). */
   idleT: number;
   idleBaseTarget: THREE.Vector3;
@@ -286,13 +288,118 @@ function setStackedOrbitTarget(ctx: ThreeCtx) {
   ctx.target.set((f1.target.x + bs.target.x) / 2, midY, (f1.target.z + bs.target.z) / 2);
 }
 
+function disposeHeatPin(ctx: ThreeCtx) {
+  if (!ctx.heatPin) return;
+  ctx.scene.remove(ctx.heatPin);
+  ctx.heatPin.geometry.dispose();
+  (ctx.heatPin.material as THREE.Material).dispose();
+  ctx.heatPin = null;
+}
+
+/**
+ * Create a glowing heatmap pin on the basement corridor (room 003 area).
+ * Uses THREE.Points with additive blending for a heat glow effect.
+ */
+function createHeatPin(ctx: ThreeCtx, yOffset: number) {
+  disposeHeatPin(ctx);
+
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const jit = () => (Math.random() - 0.5) * 0.3;
+
+  // Room 003 corridor area in scene coords (using SCALE)
+  const hx = 0 * SCALE;
+  const hz = 60 * SCALE;
+  const hw = 80 * SCALE;
+  const hd = 140 * SCALE;
+  const cx = hx + hw / 2;
+  const cz = hz + hd / 2;
+
+  // Ground heat patch
+  const step = 0.8;
+  for (let x = hx; x <= hx + hw; x += step) {
+    for (let z = hz; z <= hz + hd; z += step) {
+      const dx = (x - cx) / (hw / 2);
+      const dz = (z - cz) / (hd / 2);
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const heat = Math.max(0, 1 - dist * 0.7);
+      positions.push(x + jit(), yOffset + 0.5 + jit() * 0.15, z + jit());
+      colors.push(0.9 + heat * 0.1, 0.15 + heat * 0.55, 0.03 + (1 - heat) * 0.08);
+      if (Math.random() < 0.3) {
+        positions.push(x + jit(), yOffset + 1.5 + Math.random() * 2, z + jit());
+        colors.push(0.7, 0.3, 0.05);
+      }
+    }
+  }
+
+  // Outline
+  const corners: [number, number][] = [[hx, hz], [hx + hw, hz], [hx + hw, hz + hd], [hx, hz + hd]];
+  for (let i = 0; i < 4; i++) {
+    const [ax, az] = corners[i];
+    const [bx, bz] = corners[(i + 1) % 4];
+    const len = Math.hypot(bx - ax, bz - az);
+    const steps = Math.ceil(len / 0.4);
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      positions.push(ax + (bx - ax) * t + jit() * 0.5, yOffset + 0.5, az + (bz - az) * t + jit() * 0.5);
+      colors.push(1.0, 0.4, 0.08);
+    }
+  }
+
+  // Pin column
+  const pinH = 40;
+  for (let y = 0; y <= pinH; y += 0.5) {
+    const t = y / pinH;
+    const r = 3 * (1 - t * 0.7);
+    const n = Math.max(3, Math.floor(10 * (1 - t * 0.5)));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.5;
+      const rad = r * (0.4 + Math.random() * 0.6);
+      positions.push(cx + Math.cos(a) * rad, yOffset + 0.5 + y + jit() * 0.3, cz + Math.sin(a) * rad);
+      colors.push(0.95 - t * 0.45, 0.3 + t * 0.2, 0.05 + t * 0.25);
+    }
+  }
+
+  // Pin head sphere
+  const headY = yOffset + 0.5 + pinH;
+  for (let i = 0; i < 400; i++) {
+    const th = Math.random() * Math.PI * 2;
+    const ph = Math.random() * Math.PI;
+    const r = 5 * (0.5 + Math.random() * 0.5);
+    positions.push(cx + r * Math.sin(ph) * Math.cos(th), headY + r * Math.cos(ph), cz + r * Math.sin(ph) * Math.sin(th));
+    colors.push(1.0, 0.5, 0.12);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({
+    size: 1.2,
+    vertexColors: true,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.95,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  ctx.heatPin = new THREE.Points(geo, mat);
+  ctx.scene.add(ctx.heatPin);
+}
+
 function buildScene(ctx: ThreeCtx, mode: ViewMode) {
   clearRooms(ctx);
+  disposeHeatPin(ctx);
 
   if (mode === "stacked") {
     appendFloorRooms(ctx, "bs", 0, true);
     appendFloorRooms(ctx, "f1", STACK_GAP, true);
+    createHeatPin(ctx, 0); // basement is at yOffset 0 in stacked mode
     setStackedOrbitTarget(ctx);
+  } else if (mode === "bs") {
+    appendFloorRooms(ctx, mode, 0, false);
+    createHeatPin(ctx, 0);
+    const floor = JOHN_ABBOTT_3D_FLOORS[mode];
+    ctx.target.set(floor.target.x, floor.target.y, floor.target.z);
   } else {
     appendFloorRooms(ctx, mode, 0, false);
     const floor = JOHN_ABBOTT_3D_FLOORS[mode];
@@ -469,6 +576,7 @@ export function JohnAbbottLibraryFloorThree({
       drag: false,
       prev: { x: 0, y: 0 },
       heatOverlay: null,
+      heatPin: null,
       idleT: 0,
       idleBaseTarget: new THREE.Vector3(380, 0, 180),
       idleBaseTheta: 0.6,
@@ -614,6 +722,7 @@ export function JohnAbbottLibraryFloorThree({
       host.removeEventListener("wheel", onWheel);
       screenLabelLayer?.remove();
       disposeHeatOverlay(ctx);
+      disposeHeatPin(ctx);
       clearRooms(ctx);
       scene.remove(amb);
       scene.remove(sun);
