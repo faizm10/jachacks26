@@ -272,10 +272,16 @@ export function JohnAbbottLibraryFloorThree({
     if (!host || !canvas) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0c0f14);
+    const transparentBg = layoutVariant === "stackedEmbed";
+    scene.background = transparentBg ? null : new THREE.Color(0x0c0f14);
 
     const camera = new THREE.PerspectiveCamera(38, 16 / 9, 1, 5000);
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: transparentBg,
+      premultipliedAlpha: false,
+    });
     renderer.setPixelRatio(Math.min(typeof window !== "undefined" ? window.devicePixelRatio : 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -411,7 +417,7 @@ export function JohnAbbottLibraryFloorThree({
       renderer.dispose();
       ctxRef.current = null;
     };
-  }, [setSize]);
+  }, [setSize, layoutVariant]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -542,8 +548,13 @@ export function JohnAbbottLibraryFloorThree({
 
       <div
         ref={hostRef}
-        className="relative aspect-[3/2] w-full overflow-hidden rounded-xl border border-white/[0.06] bg-[#0c0f14]"
-        aria-label="Stacked 3D library floors"
+        className={cn(
+          "relative aspect-[3/2] w-full overflow-hidden",
+          stackedEmbed
+            ? "rounded-none border-0 bg-transparent"
+            : "rounded-xl border border-white/[0.06] bg-[#0c0f14]",
+        )}
+        aria-label={stackedEmbed ? "Stacked library floors, 3D" : "Library floor, 3D"}
       >
         {(stackedEmbed || cornerActions || canvasChildren) && (
           <div className="pointer-events-none absolute right-2 top-2 z-40 flex flex-col items-end gap-1">
@@ -582,7 +593,10 @@ export function JohnAbbottLibraryFloorThree({
         )}
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 h-full w-full cursor-grab touch-none active:cursor-grabbing"
+          className={cn(
+            "absolute inset-0 h-full w-full cursor-grab touch-none active:cursor-grabbing",
+            stackedEmbed && "bg-transparent",
+          )}
         />
         {canvasChildren}
       </div>
