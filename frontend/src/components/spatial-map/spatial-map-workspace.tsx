@@ -1,8 +1,8 @@
 "use client";
 
-import { CameraFeedPanel } from "@/components/panels/camera-feed-panel";
 import { CorridorCalibrationPanel } from "@/components/panels/corridor-calibration-panel";
 import { InteractiveFloorPlanPanel } from "@/components/panels/interactive-floor-plan-panel";
+import { PointCloudFloorPlan } from "@/components/spatial-map/point-cloud-floor-plan";
 import type { FloorPlanData } from "@/lib/types/room";
 import { motion } from "framer-motion";
 
@@ -96,6 +96,18 @@ export function SpatialMapWorkspace({ fallback }: { fallback: FloorPlanData }) {
             3D library + motion
           </p>
           <InteractiveFloorPlanPanel fallback={fallback} />
+        </motion.div>
+
+        <motion.div
+          variants={block}
+          initial="hidden"
+          animate="show"
+          transition={{ delay: 0.15 }}
+          className="min-h-[320px] lg:col-span-6">
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">
+            Point cloud scan
+          </p>
+          <PointCloudFloorPlan />
         </motion.div>
       </div>
 
