@@ -85,6 +85,9 @@ export const JOHN_ABBOTT_3D_FLOORS = {
 
 export type LibraryFloorKey = keyof typeof JOHN_ABBOTT_3D_FLOORS;
 
+/** Vertical separation between basement and 1st floor in stacked Herzberg views (scene units). */
+export const JOHN_ABBOTT_LIBRARY_STACK_GAP = 174;
+
 /** Original prototype colors (hex) — reference only */
 export const JOHN_ABBOTT_3D_MATS = {
   open: { color: 0xfafafa, opacity: 0.92, edge: 0xd0d0d0 },

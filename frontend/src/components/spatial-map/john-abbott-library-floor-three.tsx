@@ -4,6 +4,7 @@ import {
   JOHN_ABBOTT_3D_FLOORS,
   JOHN_ABBOTT_3D_MATS_DARK,
   JOHN_ABBOTT_COLLEGE_URL,
+  JOHN_ABBOTT_LIBRARY_STACK_GAP as STACK_GAP,
   JOHN_ABBOTT_LIBRARY_SUBTITLE,
   type LibraryFloorKey,
   type LibraryRoom3D,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/spatial/john-abbott-library-3d-data";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 const SCALE = 0.9;
@@ -134,9 +135,6 @@ function updateStackedScreenLabels(
     el.style.transform = `translate3d(${px}px, ${py}px, 0) translate(-50%, -118%) scale(${scale.toFixed(4)})`;
   }
 }
-
-/** Vertical world-units between basement ceiling (~28u) and 1st-floor base in stacked view. */
-const STACK_GAP = 174;
 
 type ViewMode = LibraryFloorKey | "stacked";
 
@@ -489,16 +487,6 @@ export function JohnAbbottLibraryFloorThree({
   const [viewMode, setViewMode] = useState<ViewMode>("f1");
   const [selected, setSelected] = useState<{ id: string; note: string } | null>(null);
   const effectiveViewMode: ViewMode = stackedEmbed ? "stacked" : viewMode;
-
-  const stackedLegendZones = useMemo(() => {
-    if (!stackedEmbed) return [];
-    return getStackedAreaMarkers(STACK_GAP).map(({ id, floor, title, accent }) => ({
-      id,
-      floor,
-      title,
-      accent,
-    }));
-  }, [stackedEmbed]);
 
   const setSize = useCallback((ctx: ThreeCtx, w: number, h: number) => {
     const H = Math.max(120, h);
@@ -905,25 +893,6 @@ export function JohnAbbottLibraryFloorThree({
                   ↗
                 </span>
               </a>
-              <div className="mt-3 border-t border-white/[0.08] pt-3">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35">Zone tags</p>
-                <ul className="mt-2 grid gap-1.5">
-                  {stackedLegendZones.map((z) => (
-                    <li key={z.id} className="flex items-start gap-2 text-[11px] leading-snug text-white/70">
-                      <span
-                        className="mt-0.5 h-2 w-2 shrink-0 rounded-full ring-1 ring-white/20"
-                        style={{ backgroundColor: z.accent }}
-                        aria-hidden
-                      />
-                      <span>
-                        <span className="text-white/40">{z.floor}</span>
-                        <span className="mx-1 text-white/25">·</span>
-                        {z.title}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
           </div>
         ) : null}
