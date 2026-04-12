@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Caveat } from "next/font/google";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,11 +20,10 @@ const caveat = Caveat({
 
 export const metadata: Metadata = {
   title: {
-    default: "Room Intelligence",
-    template: "%s · Room Intelligence",
+    default: SITE_NAME,
+    template: `%s · ${SITE_NAME}`,
   },
-  description:
-    "Understand how a room is being used in real time — a calm, premium spatial awareness surface.",
+  description: SITE_DESCRIPTION,
 };
 
 export default function RootLayout({

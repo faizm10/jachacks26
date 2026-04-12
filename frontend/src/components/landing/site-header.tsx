@@ -1,6 +1,7 @@
 "use client";
 
 import { LogoMark } from "@/components/brand/logo-mark";
+import { SITE_NAME } from "@/lib/brand";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
@@ -15,7 +16,7 @@ export function SiteHeader() {
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5">
           <LogoMark className="h-8 w-8" />
-          <span className="text-sm font-semibold tracking-tight text-white">Room Intelligence</span>
+          <span className="text-sm font-semibold tracking-tight text-white">{SITE_NAME}</span>
         </Link>
         <Link
           href="/dashboard"

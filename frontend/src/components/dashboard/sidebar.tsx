@@ -1,6 +1,7 @@
 "use client";
 
 import { LogoMark } from "@/components/brand/logo-mark";
+import { SITE_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -46,7 +47,7 @@ export function Sidebar({
         <div className="flex items-center gap-3 px-5 py-5">
           <LogoMark />
           <div>
-            <p className="text-sm font-semibold tracking-tight text-white">Room Intelligence</p>
+            <p className="text-sm font-semibold tracking-tight text-white">{SITE_NAME}</p>
             <p className="text-[11px] font-medium text-white/40">Control surface</p>
           </div>
         </div>

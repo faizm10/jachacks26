@@ -111,7 +111,7 @@ export async function fetchAllCamsObjects(
   let prefix = normalizePrefix(options?.prefix ?? process.env.NEXT_PUBLIC_CAMS_PREFIX);
   if (prefix.length > 0 && prefix.toLowerCase() === bucket.toLowerCase()) {
     console.warn(
-      `[Room Intelligence] Ignoring NEXT_PUBLIC_CAMS_PREFIX="${prefix}" — it matches the bucket id "${bucket}". Prefix must be a subfolder inside the bucket (or leave unset for root).`,
+      `[FoCo] Ignoring NEXT_PUBLIC_CAMS_PREFIX="${prefix}" — it matches the bucket id "${bucket}". Prefix must be a subfolder inside the bucket (or leave unset for root).`,
     );
     prefix = "";
   }
@@ -153,7 +153,7 @@ export async function fetchLatestCamsObject(
   /* Common mistake: prefix is a folder *inside* the bucket, not the bucket id. Listing prefix === bucket yields empty when files live at root. */
   if (prefix.length > 0 && prefix.toLowerCase() === bucket.toLowerCase()) {
     console.warn(
-      `[Room Intelligence] Ignoring NEXT_PUBLIC_CAMS_PREFIX="${prefix}" — it matches the bucket id "${bucket}". Prefix must be a subfolder inside the bucket (or leave unset for root).`,
+      `[FoCo] Ignoring NEXT_PUBLIC_CAMS_PREFIX="${prefix}" — it matches the bucket id "${bucket}". Prefix must be a subfolder inside the bucket (or leave unset for root).`,
     );
     prefix = "";
   }

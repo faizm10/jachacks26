@@ -1,5 +1,6 @@
 "use client";
 
+import { SITE_NAME } from "@/lib/brand";
 import { GlassLinkButton } from "@/components/ui/glass-link-button";
 import { motion } from "framer-motion";
 
@@ -38,7 +39,7 @@ export function Hero() {
         variants={item}
         className="mt-5 text-balance text-4xl font-semibold tracking-tight text-white sm:text-5xl sm:leading-[1.08]"
       >
-        Room Intelligence
+        {SITE_NAME}
       </motion.h1>
       <motion.p
         variants={item}

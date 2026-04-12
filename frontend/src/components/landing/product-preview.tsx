@@ -1,6 +1,7 @@
 "use client";
 
 import { GlassPanel } from "@/components/ui/glass-panel";
+import { SITE_NAME } from "@/lib/brand";
 import { motion } from "framer-motion";
 
 export function ProductPreview() {
@@ -20,7 +21,7 @@ export function ProductPreview() {
               <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
             </div>
             <span className="ml-2 text-[11px] font-medium tracking-wide text-white/35">
-              room-intelligence · live session
+              {SITE_NAME.toLowerCase()} · live session
             </span>
           </div>
           <div className="grid gap-3 p-4 sm:grid-cols-[1.1fr_0.9fr] sm:p-5">

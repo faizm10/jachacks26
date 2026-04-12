@@ -1,6 +1,7 @@
 "use client";
 
 import { LogoMark } from "@/components/brand/logo-mark";
+import { SITE_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -32,7 +33,7 @@ export function TopNav({
           <Link href="/dashboard" className="hidden items-center gap-2 lg:flex">
             <LogoMark className="h-8 w-8" />
             <div className="leading-tight">
-              <p className="text-sm font-semibold tracking-tight text-white">Room Intelligence</p>
+              <p className="text-sm font-semibold tracking-tight text-white">{SITE_NAME}</p>
               <p className="text-[11px] font-medium text-white/40">{title}</p>
             </div>
           </Link>
