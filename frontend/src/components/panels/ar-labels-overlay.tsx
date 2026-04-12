@@ -4,6 +4,11 @@ import type {
   DetectedObject,
   ObjectDetection as CocoObjectDetector,
 } from "@tensorflow-models/coco-ssd";
+import {
+  getCachedGeminiAnalysis,
+  setCachedGeminiAnalysis,
+  deleteCachedGeminiAnalysis,
+} from "@/lib/analysis-cache";
 import { getActivityLabelTheme, isLockedInActivity } from "@/lib/ar-label-activity-colors";
 import type { DetectedPerson, FrameAnalysis } from "@/lib/types/room";
 import { ArLabelColorLegend } from "@/components/panels/ar-label-color-legend";
@@ -457,6 +462,7 @@ export function ARLabelsOverlay({
 
     let lastCountUpdate = 0;
     let lastVideoTime = -1;
+    let detectionDone = false; // true after one full video pass — stop running COCO-SSD
     let maxTimeReached = 0;
 
     const loop = async () => {
@@ -478,15 +484,15 @@ export function ARLabelsOverlay({
 
       const currentTime = video.currentTime;
 
-      // Detect when the video loops: time jumps backward significantly — reset tracking
+      // Detect when the video loops: time jumps backward — stop running new detections
       if (currentTime < maxTimeReached - 1 && maxTimeReached > 1) {
-        maxTimeReached = 0;
-        tracksRef.current = [];
+        detectionDone = true;
       }
       maxTimeReached = Math.max(maxTimeReached, currentTime);
 
-      // Skip if video time hasn't changed (paused)
-      if (Math.abs(currentTime - lastVideoTime) < 0.01) {
+      // After one full pass, just redraw existing tracks (no new COCO-SSD detection)
+      // Also skip if video time hasn't changed (paused)
+      if (detectionDone || Math.abs(currentTime - lastVideoTime) < 0.01) {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           drawTracks(
@@ -591,13 +597,22 @@ export function ARLabelsOverlay({
       return;
     }
 
-    // Check persistent cache first
+    // Check in-memory cache first
     const cached = analysisCacheRef.current.get(videoUrl);
     if (cached) {
       cachedGeminiPersons.current = cached.persons;
       setGeminiStatus("done");
       setSceneDescription(cached.scene);
-      console.log("[AR] Loaded from cache —", cached.persons.length, "persons.");
+      return;
+    }
+
+    // Check IndexedDB persistent cache
+    const idbCached = await getCachedGeminiAnalysis(videoUrl);
+    if (idbCached) {
+      cachedGeminiPersons.current = idbCached.persons;
+      analysisCacheRef.current.set(videoUrl, idbCached);
+      setGeminiStatus("done");
+      setSceneDescription(idbCached.scene);
       return;
     }
 
@@ -649,11 +664,12 @@ export function ARLabelsOverlay({
       setGeminiStatus("done");
       setSceneDescription(data.sceneDescription);
 
-      // Save to persistent cache
+      // Save to in-memory + IndexedDB cache
       analysisCacheRef.current.set(videoUrl, {
         persons: data.persons,
         scene: data.sceneDescription,
       });
+      void setCachedGeminiAnalysis(videoUrl, data.persons, data.sceneDescription);
     } catch (e) {
       console.error("[AR] Gemini error:", e);
       setGeminiStatus("failed");
@@ -674,7 +690,7 @@ export function ARLabelsOverlay({
   useEffect(() => {
     if (!hasVideo || !videoUrl) { setSceneDescription(""); return; }
 
-    // Restore from cache immediately if available
+    // Restore from in-memory cache immediately if available
     const cached = analysisCacheRef.current.get(videoUrl);
     if (cached) {
       cachedGeminiPersons.current = cached.persons;
@@ -683,22 +699,41 @@ export function ARLabelsOverlay({
       return;
     }
 
-    // Not cached — run analysis with retries
-    setGeminiStatus("idle");
-    let attempt = 0;
-    const delays = [1500, 6000, 15000];
+    // Check IndexedDB, then fall back to network
+    let cancelled = false;
+    let retryTimer: number | undefined;
 
-    const tryNext = () => {
-      if (geminiStatus.current === "done" || attempt >= delays.length) return;
-      const delay = delays[attempt];
-      attempt++;
-      return window.setTimeout(() => {
-        if (geminiStatus.current !== "done") void analyzeOnce().then(tryNext);
-      }, delay);
+    getCachedGeminiAnalysis(videoUrl).then((idbCached) => {
+      if (cancelled) return;
+      if (idbCached) {
+        cachedGeminiPersons.current = idbCached.persons;
+        analysisCacheRef.current.set(videoUrl, idbCached);
+        setGeminiStatus("done");
+        setSceneDescription(idbCached.scene);
+        return;
+      }
+
+      // Not cached anywhere — run analysis with retries
+      setGeminiStatus("idle");
+      let attempt = 0;
+      const delays = [1500, 6000, 15000];
+
+      const tryNext = () => {
+        if (cancelled || geminiStatus.current === "done" || attempt >= delays.length) return;
+        const delay = delays[attempt];
+        attempt++;
+        retryTimer = window.setTimeout(() => {
+          if (!cancelled && geminiStatus.current !== "done") void analyzeOnce().then(tryNext);
+        }, delay);
+      };
+
+      tryNext();
+    });
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-
-    const firstTimer = tryNext();
-    return () => { if (firstTimer) clearTimeout(firstTimer); };
   }, [videoUrl, hasVideo, analyzeOnce]);
 
   // Reset tracks + canvas when switching videos (but NOT the analysis cache)
@@ -725,6 +760,7 @@ export function ARLabelsOverlay({
     if (!retryKey || !videoUrl) return;
     inFlight.current = false;
     analysisCacheRef.current.delete(videoUrl);
+    void deleteCachedGeminiAnalysis(videoUrl);
     cachedGeminiPersons.current = [];
     setGeminiStatus("idle");
     setSceneDescription("");

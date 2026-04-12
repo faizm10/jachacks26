@@ -1,5 +1,6 @@
 "use client";
 
+import { getCachedLiveAnalysis, setCachedLiveAnalysis } from "@/lib/analysis-cache";
 import type { FrameAnalysis } from "@/lib/types/room";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -44,6 +45,21 @@ export function useLiveAnalysis(
   const realtimeMs = options?.realtimeFrameCaptureMs ?? 0;
   const videoElRef = options?.videoRef ?? null;
 
+  // Restore from IndexedDB on mount / URL change
+  useEffect(() => {
+    if (!frameUrl) return;
+    let cancelled = false;
+    getCachedLiveAnalysis(frameUrl).then((cached) => {
+      if (cancelled || !cached) return;
+      // Only restore if we don't already have a result for this URL
+      if (lastAnalyzedUrl.current === frameUrl) return;
+      setAnalysis(cached);
+      setStatus("ready");
+      lastAnalyzedUrl.current = frameUrl;
+    });
+    return () => { cancelled = true; };
+  }, [frameUrl]);
+
   const runAnalysis = useCallback(async (url: string) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -66,6 +82,8 @@ export function useLiveAnalysis(
       setAnalysis(data);
       setStatus("ready");
       lastAnalyzedUrl.current = url;
+      doneRef.current = true;
+      void setCachedLiveAnalysis(url, data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed");
       setStatus("error");
@@ -74,9 +92,12 @@ export function useLiveAnalysis(
     }
   }, []);
 
+  /** Set to true once we have a successful result — stops all further API calls for this URL. */
+  const doneRef = useRef(false);
+
   const runFrameCaptureAnalysis = useCallback(async () => {
     const url = frameUrlRef.current;
-    if (!url || frameCaptureInFlight.current) return;
+    if (!url || frameCaptureInFlight.current || doneRef.current) return;
 
     const video = videoElRef?.current
       ?? document.querySelector("video[data-live-frame-capture]") as HTMLVideoElement | null;
@@ -109,9 +130,12 @@ export function useLiveAnalysis(
       if (!res.ok) return;
 
       const data = (await res.json()) as FrameAnalysis;
-      setAnalysis({ ...data, frameUrl: url });
+      const result = { ...data, frameUrl: url };
+      setAnalysis(result);
       setError(null);
       setStatus("ready");
+      doneRef.current = true; // Stop further captures
+      if (url) void setCachedLiveAnalysis(url, result);
     } catch {
       // soft-fail for background ticks — keep last good analysis
     } finally {
@@ -119,28 +143,31 @@ export function useLiveAnalysis(
     }
   }, []);
 
-  // Analyze once when the user selects a different feed
+  // Analyze once when the URL changes — skip if we already have a result (from cache or prior run)
   useEffect(() => {
     if (!frameUrl) {
-      // Deselected — reset to idle but keep last analysis visible
       setStatus("idle");
+      doneRef.current = false;
       return;
     }
-    if (frameUrl !== lastAnalyzedUrl.current) {
-      void runAnalysis(frameUrl);
+    if (lastAnalyzedUrl.current === frameUrl) {
+      doneRef.current = true; // already have data, don't re-fetch
+      return;
     }
+    doneRef.current = false;
+    void runAnalysis(frameUrl);
   }, [frameUrl, runAnalysis]);
 
-  // Near–real-time: current playback frame → /api/analyze-frame (same contract as URL analyze)
+  // Frame capture — runs on an interval but stops once doneRef is true
   useEffect(() => {
     if (!realtimeMs || !frameUrl || realtimeMs < 500) return;
 
     const kickoff = window.setTimeout(() => {
-      void runFrameCaptureAnalysis();
+      if (!doneRef.current) void runFrameCaptureAnalysis();
     }, 1200);
 
     const id = window.setInterval(() => {
-      void runFrameCaptureAnalysis();
+      if (!doneRef.current) void runFrameCaptureAnalysis();
     }, realtimeMs);
 
     return () => {
