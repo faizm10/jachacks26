@@ -5,7 +5,7 @@
 ---
 
 <p align="center">
-  <img src="./image.png" width="780" alt="Foco — product preview" />
+  <img src="./thumbnail.png" width="780" alt="Foco — product preview" />
 </p>
 
 ---
