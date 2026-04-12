@@ -4,11 +4,13 @@ import { ARLabelsOverlay } from "@/components/panels/ar-labels-overlay";
 import { GlassPanel } from "@/components/ui/glass-panel";
 import { SectionHeader } from "@/components/panels/section-header";
 import { useActiveVideo } from "@/components/room-intel/active-video-context";
+import { useLiveAnalysis } from "@/hooks/use-live-analysis";
 import { useCamsAllFeeds } from "@/hooks/use-cams-all-feeds";
 import { getCamsBucketName } from "@/lib/supabase/cams-bucket";
 import type { CamsLatestObject } from "@/lib/supabase/cams-bucket";
 import { motion } from "framer-motion";
 import { Clapperboard } from "lucide-react";
+import type { RefObject } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -132,8 +134,19 @@ function VideoTile({
   const [desc, setDesc] = useState("");
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>("idle");
   const [retryKey, setRetryKey] = useState(0);
+  const [videoRef, setVideoRef] = useState<RefObject<HTMLVideoElement | null> | null>(null);
   const fileName = obj.path.split("/").pop() ?? obj.path;
   const isVideo = obj.kind === "video";
+
+  // Per-tile live analysis — captures frames from this tile's video
+  const { analysis } = useLiveAnalysis(isVideo ? obj.url : null, {
+    realtimeFrameCaptureMs: 4000,
+    videoRef: videoRef ?? undefined,
+  });
+
+  const handleVideoRef = useCallback((ref: RefObject<HTMLVideoElement | null>) => {
+    setVideoRef(ref);
+  }, []);
 
   const handleSceneDescription = useCallback((d: string, status: AnalysisStatus) => {
     setDesc(d);
@@ -171,12 +184,15 @@ function VideoTile({
             isVideo ? (
               <ARLabelsOverlay
                 videoUrl={obj.url}
-                persons={[]}
+                persons={analysis?.persons ?? []}
+                liveSceneSummary={analysis?.sceneDescription}
                 inline
                 onSceneDescription={handleSceneDescription}
                 expanded={arExpanded}
                 onExpandedChange={setArExpanded}
                 retryKey={retryKey}
+                onVideoRef={handleVideoRef}
+                peopleCount={analysis?.peopleCount}
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element

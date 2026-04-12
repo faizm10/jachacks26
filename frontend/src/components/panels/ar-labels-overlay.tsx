@@ -388,6 +388,10 @@ export interface ARLabelsOverlayProps {
   onExpandedChange?: (v: boolean) => void;
   /** Increment to force re-analysis (e.g. after a failure). */
   retryKey?: number;
+  /** Exposes the internal video element ref so the parent can capture frames. */
+  onVideoRef?: (ref: React.RefObject<HTMLVideoElement | null>) => void;
+  /** Override displayed person count (e.g. from live analysis). */
+  peopleCount?: number;
 }
 
 export function ARLabelsOverlay({
@@ -400,12 +404,16 @@ export function ARLabelsOverlay({
   expanded: controlledExpanded,
   onExpandedChange,
   retryKey,
+  onVideoRef,
+  peopleCount: externalPeopleCount,
 }: ARLabelsOverlayProps) {
   const latestPersonsRef = useRef<DetectedPerson[]>(persons);
   latestPersonsRef.current = persons;
   const highlightIdRef = useRef<string | null>(highlightedPersonId ?? null);
   highlightIdRef.current = highlightedPersonId ?? null;
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Expose the video ref to the parent so it can capture frames
+  useEffect(() => { onVideoRef?.(videoRef); }, [onVideoRef]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const tracksRef = useRef<TrackedPerson[]>([]);
   const modelRef = useRef<CocoObjectDetector | null>(null);
@@ -422,7 +430,8 @@ export function ARLabelsOverlay({
   const hasVideo = !!videoUrl;
 
   const [modelReady, setModelReady] = useState(false);
-  const [personCount, setPersonCount] = useState(0);
+  const [personCount, setPersonCountInternal] = useState(0);
+  const displayCount = externalPeopleCount ?? personCount;
   /** When any visible labeled track is "locked in", tint the header count chip pink. */
   const [lockedInChip, setLockedInChip] = useState(false);
   const [geminiStatusState, setGeminiStatusState] = useState<GeminiDrawStatus>("idle");
@@ -530,10 +539,16 @@ export function ARLabelsOverlay({
         }
 
         // Update React state for the header count — throttled to avoid re-renders
+        // Use the higher of COCO-SSD tracks vs Gemini/live analysis person count,
+        // since COCO-SSD often misses people that Gemini detects.
         const now = Date.now();
         if (now - lastCountUpdate > 500) {
           const visible = tracksRef.current.filter((t) => t.age >= MIN_AGE);
-          setPersonCount(visible.length);
+          const analysisCount = Math.max(
+            latestPersonsRef.current.length,
+            cachedGeminiPersons.current.length,
+          );
+          setPersonCountInternal(Math.max(visible.length, analysisCount));
           setLockedInChip(
             visible.some((t) => t.activity !== "detected" && isLockedInActivity(t.activity)),
           );
@@ -690,7 +705,7 @@ export function ARLabelsOverlay({
   useEffect(() => {
     tracksRef.current = [];
     inFlight.current = false;
-    setPersonCount(0);
+    setPersonCountInternal(0);
     setLockedInChip(false);
     const canvas = canvasRef.current;
     if (canvas) {
@@ -718,71 +733,107 @@ export function ARLabelsOverlay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryKey]);
 
+  // Fullscreen toggle for inline mode — uses the native Fullscreen API on the container
+  const inlineContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!inline) return;
+    const container = inlineContainerRef.current;
+    if (!container) return;
+
+    if (expanded) {
+      if (document.fullscreenElement !== container) {
+        container.requestFullscreen?.().catch(() => {
+          // Fullscreen blocked — ignore
+        });
+      }
+    } else {
+      if (document.fullscreenElement === container) {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    }
+  }, [expanded, inline]);
+
+  // Sync expanded state when the user exits fullscreen via Escape / browser UI
+  useEffect(() => {
+    if (!inline) return;
+    const onFsChange = () => {
+      if (!document.fullscreenElement) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, [inline, setExpanded]);
+
   // ── Inline mode: just the video + canvas, no wrapper ──
   if (inline) {
     return (
-      <>
-        <div className="relative h-full w-full overflow-hidden bg-black">
-          {personCount > 0 && (
-            <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              <span className="rounded-full border border-emerald-400/25 bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-sm">
-                {personCount} people
-              </span>
-            </div>
-          )}
-          {hasVideo ? (
-            <>
-              <video
-                ref={videoRef}
-                key={videoUrl}
-                data-live-frame-capture=""
-                data-analysis-url={videoUrl ?? ""}
-                className="h-full w-full object-cover"
-                src={videoUrl}
-                autoPlay
-                muted
-                playsInline
-                loop
-                crossOrigin="anonymous"
-              />
-              <canvas
-                ref={canvasRef}
-                className="pointer-events-none absolute inset-0 h-full w-full"
-                style={{ pointerEvents: "none" }}
-              />
-            </>
-          ) : null}
-          {hasVideo && !modelReady && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2">
-                <motion.div
-                  className="h-4 w-4 rounded-full border-2 border-white/20 border-t-emerald-400"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
-                />
-                <span className="text-xs text-white/60">Loading detection model…</span>
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Expanded fullscreen modal — shares existing tracks, no regeneration */}
-        {expanded && hasVideo && typeof document !== "undefined" && createPortal(
-          <ExpandedARModal
-            videoUrl={videoUrl!}
-            tracksRef={tracksRef}
-            highlightIdRef={highlightIdRef}
-            geminiStatus={geminiStatus.current}
-            expandedVideoRef={expandedVideoRef}
-            expandedCanvasRef={expandedCanvasRef}
-            expandedRafRef={expandedRafRef}
-            personCount={personCount}
-            sceneDescription={sceneDescription}
-            onClose={() => setExpanded(false)}
-          />,
-          document.body,
+      <div
+        ref={inlineContainerRef}
+        className="relative h-full w-full overflow-hidden bg-black"
+      >
+        {displayCount > 0 && (
+          <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+            <span className="rounded-full border border-emerald-400/25 bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-sm">
+              {displayCount} people
+            </span>
+          </div>
         )}
-      </>
+        {hasVideo ? (
+          <>
+            <video
+              ref={videoRef}
+              key={videoUrl}
+              data-live-frame-capture=""
+              data-analysis-url={videoUrl ?? ""}
+              className="h-full w-full object-cover"
+              src={videoUrl}
+              autoPlay
+              muted
+              playsInline
+              loop
+              crossOrigin="anonymous"
+            />
+            <canvas
+              ref={canvasRef}
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              style={{ pointerEvents: "none" }}
+            />
+          </>
+        ) : null}
+        {hasVideo && !modelReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2">
+              <motion.div
+                className="h-4 w-4 rounded-full border-2 border-white/20 border-t-emerald-400"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+              />
+              <span className="text-xs text-white/60">Loading detection model…</span>
+            </div>
+          </div>
+        )}
+        {/* Close button visible only in fullscreen */}
+        {expanded && (
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="absolute right-4 top-4 z-30 rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-medium text-white/80 backdrop-blur-sm transition-colors hover:bg-black/90 hover:text-white"
+          >
+            Exit fullscreen
+          </button>
+        )}
+        {/* Scene description in fullscreen */}
+        {expanded && sceneDescription && (
+          <div className="absolute bottom-4 left-4 right-4 z-20">
+            <p className="rounded-lg bg-black/70 px-3 py-2 text-sm text-white/60 backdrop-blur-sm">
+              {sceneDescription}
+            </p>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -792,8 +843,8 @@ export function ARLabelsOverlay({
       <SectionHeader
         title="AR labels"
         subtitle={
-          personCount > 0
-            ? `${personCount} detection${personCount !== 1 ? "s" : ""} · real-time tracking`
+          displayCount > 0
+            ? `${displayCount} detection${displayCount !== 1 ? "s" : ""} · real-time tracking`
             : hasVideo && !modelReady
               ? "Loading detection model…"
               : hasVideo
@@ -813,7 +864,7 @@ export function ARLabelsOverlay({
                 }`}
               />
             )}
-            {personCount > 0 ? (
+            {displayCount > 0 ? (
               <span
                 className={
                   lockedInChip
@@ -821,7 +872,7 @@ export function ARLabelsOverlay({
                     : "rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90"
                 }
               >
-                {personCount} people
+                {displayCount} people
               </span>
             ) : null}
           </div>
@@ -904,7 +955,7 @@ export function ARLabelsOverlay({
           expandedVideoRef={expandedVideoRef}
           expandedCanvasRef={expandedCanvasRef}
           expandedRafRef={expandedRafRef}
-          personCount={personCount}
+          personCount={displayCount}
           sceneDescription={sceneDescription}
           onClose={() => setExpanded(false)}
         />,
