@@ -8,72 +8,11 @@ import { analyzeFloorplanFromVideo, FloorplanApiError } from "@/lib/api/floorpla
 import type { FloorPlanData } from "@/lib/types/room";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const PHASES = ["Downloading clip…", "Sampling motion…", "Mapping activity…"];
 
-/** Served from `public/floorplans/` (copy of repo `floor_plans/floorplan_transparent.png`, 1536×1024). */
-export const DEFAULT_FLOOR_PLAN_SRC = "/floorplans/floorplan_transparent.png";
-
-function MotionHeatSchematicPreview({
-  basePlanSrc,
-  overlayDataUrl,
-  pipeline,
-  patternId,
-}: {
-  basePlanSrc: string;
-  overlayDataUrl: string;
-  pipeline?: string;
-  patternId: string;
-}) {
-  const isHomography = pipeline === "yolo_homography";
-  return (
-    <div className="relative aspect-[3/2] max-h-[min(40vh,280px)] w-full overflow-hidden rounded-lg border border-white/[0.08] bg-[#0c0f14]">
-      <svg
-        className="absolute inset-0 h-full w-full"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="xMidYMid meet"
-        role="img"
-        aria-label="Motion heat on schematic floor plan"
-      >
-        <defs>
-          <pattern id={patternId} width="6" height="6" patternUnits="userSpaceOnUse">
-            <path
-              d="M 6 0 L 0 0 0 6"
-              fill="none"
-              stroke="rgba(255,255,255,0.04)"
-              strokeWidth="0.08"
-            />
-          </pattern>
-        </defs>
-        <rect width="100" height="100" fill="#0c0f14" />
-        <image href={basePlanSrc} width="100" height="100" preserveAspectRatio="xMidYMid meet" />
-        <rect width="100" height="100" fill={`url(#${patternId})`} opacity={0.18} />
-        <rect width="100" height="100" fill="rgba(0,0,0,0.06)" />
-        <image
-          href={overlayDataUrl}
-          width="100"
-          height="100"
-          preserveAspectRatio="xMidYMid meet"
-          opacity={isHomography ? 1 : 0.62}
-          style={{
-            mixBlendMode: isHomography ? ("normal" as const) : ("screen" as const),
-          }}
-        />
-      </svg>
-    </div>
-  );
-}
-
-export function InteractiveFloorPlanPanel({
-  fallback,
-  /** Raster under heat in the 2D motion preview only */
-  basePlanSrc = DEFAULT_FLOOR_PLAN_SRC,
-}: {
-  fallback: FloorPlanData;
-  basePlanSrc?: string;
-}) {
-  const heatPatternId = useId().replace(/:/g, "");
+export function InteractiveFloorPlanPanel({ fallback }: { fallback: FloorPlanData }) {
   const { activeVideo } = useActiveVideo();
   const [data, setData] = useState<FloorPlanData>(fallback);
   const [loading, setLoading] = useState(false);
@@ -133,7 +72,7 @@ export function InteractiveFloorPlanPanel({
     : error
       ? "3D library view active — API fallback for motion heat"
       : data.source === "video"
-        ? "3D library + motion heat on the ground plane and in the schematic (from your clip)"
+        ? "3D library + motion heat on the ground plane (from your clip)"
         : "Interactive 3D library — pick a clip to generate a motion heat overlay";
 
   const fileHint = activeVideo?.path?.split("/").pop() ?? null;
@@ -235,31 +174,6 @@ export function InteractiveFloorPlanPanel({
             ) : null
           }
         />
-
-        {data.overlayDataUrl ? (
-          <details
-            className="group rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 open:border-emerald-400/20"
-            open
-          >
-            <summary className="cursor-pointer list-none text-xs font-medium text-white/70 outline-none [&::-webkit-details-marker]:hidden">
-              <span className="inline-flex flex-wrap items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/80" />
-                Motion heat (2D schematic)
-                <span className="text-[10px] font-normal text-white/40">
-                  Same image is draped on the 3D ground slab (3D heat toggle) — extruded rooms are illustrative
-                </span>
-              </span>
-            </summary>
-            <div className="mt-3">
-              <MotionHeatSchematicPreview
-                basePlanSrc={basePlanSrc}
-                overlayDataUrl={data.overlayDataUrl}
-                pipeline={typeof data.meta?.pipeline === "string" ? data.meta.pipeline : undefined}
-                patternId={`heat-${heatPatternId}`}
-              />
-            </div>
-          </details>
-        ) : null}
       </div>
     </GlassPanel>
   );

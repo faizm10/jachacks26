@@ -35,8 +35,7 @@ export function SpatialMapWorkspace({ fallback }: { fallback: FloorPlanData }) {
             <span>
               <strong className="font-medium text-white/85">The 3D map</strong> is an interactive
               John Abbott College Library model (orbit, zoom, room picks). When you analyze a clip, the
-              same homography overlay is shown on the <strong className="text-white/85">3D ground slab</strong>{" "}
-              and in the 2D schematic below, using{" "}
+              same homography overlay is shown on the <strong className="text-white/85">3D ground slab</strong>, using{" "}
               <code className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[12px] text-white/70">
                 /floorplans/floorplan_transparent.png
               </code>{" "}
