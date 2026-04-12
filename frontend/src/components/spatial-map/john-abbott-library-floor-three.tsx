@@ -3,28 +3,30 @@
 import {
   JOHN_ABBOTT_3D_FLOORS,
   JOHN_ABBOTT_3D_MATS_DARK,
-  JOHN_ABBOTT_COLLEGE_URL,
   JOHN_ABBOTT_LIBRARY_STACK_GAP as STACK_GAP,
   JOHN_ABBOTT_LIBRARY_SUBTITLE,
   type LibraryFloorKey,
   type LibraryRoom3D,
   type LibraryRoomType,
 } from "@/lib/spatial/john-abbott-library-3d-data";
+import {
+  createJohnAbbottActivityHexes,
+  disposeHexColumnMeshes,
+  getZoneLabelAnchors,
+  HEATMAP_SCALE,
+  pulseHexColumns,
+  updateCanvasWorldLabels,
+  type CanvasWorldLabel,
+} from "@/lib/spatial/john-abbott-hex-heatmap";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
-const SCALE = 0.9;
+const SCALE = HEATMAP_SCALE;
 const HOVER_EMISSIVE = 0x4c6fa8;
 
-/** Lift label anchor slightly above room roof (world Y). */
 const LABEL_Y_LIFT = 10;
-
-const _proj = new THREE.Vector3();
-const _camPos = new THREE.Vector3();
-const _toPoint = new THREE.Vector3();
-const _camDir = new THREE.Vector3();
 
 function roomAnchorWorld(
   r: { x: number; z: number; w: number; d: number; h: number },
@@ -37,7 +39,6 @@ function roomAnchorWorld(
   );
 }
 
-/** Main zones for stacked embed — anchors follow orbit each frame (screen projection). */
 function getStackedAreaMarkers(stackGap: number) {
   const f1 = JOHN_ABBOTT_3D_FLOORS.f1.rooms;
   const bs = JOHN_ABBOTT_3D_FLOORS.bs.rooms;
@@ -69,76 +70,11 @@ function getStackedAreaMarkers(stackGap: number) {
       accent: "#fcd34d",
       world: roomAnchorWorld(pick(f1, "104"), stackGap),
     },
-    {
-      id: "bs-foyer",
-      floor: "Basement",
-      title: "Foyer · You are here",
-      accent: "#86efac",
-      world: roomAnchorWorld(pick(bs, "004"), 0),
-    },
-    {
-      id: "bs-open",
-      floor: "Basement",
-      title: "Open study core",
-      accent: "#67e8f9",
-      world: roomAnchorWorld(pick(bs, "001"), 0),
-    },
-    {
-      id: "bs-east",
-      floor: "Basement",
-      title: "East wing · lab & study",
-      accent: "#93c5fd",
-      world: roomAnchorWorld(pick(bs, "024"), 0),
-    },
   ] as const;
-}
-
-type StackedScreenLabel = { el: HTMLDivElement; world: THREE.Vector3 };
-
-/** Project world anchors to CSS pixels over the canvas (call after camera is current). */
-function updateStackedScreenLabels(
-  camera: THREE.PerspectiveCamera,
-  canvas: HTMLCanvasElement,
-  entries: StackedScreenLabel[],
-) {
-  if (!entries.length) return;
-  const rect = canvas.getBoundingClientRect();
-  const w = Math.max(1, rect.width);
-  const h = Math.max(1, rect.height);
-  camera.updateMatrixWorld(true);
-  camera.getWorldPosition(_camPos);
-  camera.getWorldDirection(_camDir);
-  for (const { el, world } of entries) {
-    _toPoint.copy(world).sub(_camPos).normalize();
-    const faceDot = _toPoint.dot(_camDir);
-    const facing = faceDot > 0.06;
-    _proj.copy(world).project(camera);
-    const m = 0.08;
-    const inFrustum =
-      _proj.z > -1 &&
-      _proj.z < 1 &&
-      _proj.x > -1 + m &&
-      _proj.x < 1 - m &&
-      _proj.y > -1 + m &&
-      _proj.y < 1 - m;
-    if (!facing || !inFrustum) {
-      el.style.opacity = "0";
-      el.style.visibility = "hidden";
-      continue;
-    }
-    el.style.visibility = "visible";
-    const face01 = Math.min(1, Math.max(0, (faceDot - 0.06) / 0.5));
-    const scale = 0.9 + 0.1 * face01;
-    el.style.opacity = String(0.5 + 0.48 * face01);
-    const px = (_proj.x * 0.5 + 0.5) * w;
-    const py = (-_proj.y * 0.5 + 0.5) * h;
-    el.style.transform = `translate3d(${px}px, ${py}px, 0) translate(-50%, -118%) scale(${scale.toFixed(4)})`;
-  }
 }
 
 type ViewMode = LibraryFloorKey | "stacked";
 
-/** Ground slab — homography heat PNG is draped here (same transform as the dark floor). */
 const FLOOR_SLAB = {
   width: 1400,
   depth: 900,
@@ -147,6 +83,10 @@ const FLOOR_SLAB = {
   cyHeat: 0.06,
   cz: 200,
 } as const;
+
+// ---------------------------------------------------------------------------
+// ThreeCtx
+// ---------------------------------------------------------------------------
 
 interface ThreeCtx {
   scene: THREE.Scene;
@@ -169,11 +109,8 @@ interface ThreeCtx {
   hovMesh: THREE.Mesh | null;
   drag: boolean;
   prev: { x: number; y: number };
-  /** Video-derived motion heat (RGBA); not used for room raycast. */
   heatOverlay: THREE.Mesh | null;
-  /** Heatmap pin (THREE.Points) on the basement level. */
-  heatPin: THREE.Points | null;
-  /** Seconds accumulated for idle orbit + bob (paused while `drag`). */
+  hexColumns: THREE.Mesh[];
   idleT: number;
   idleBaseTarget: THREE.Vector3;
   idleBaseTheta: number;
@@ -216,16 +153,15 @@ function clearRooms(ctx: ThreeCtx) {
   ctx.edgeMeshes = [];
 }
 
+function disposeHexColumns(ctx: ThreeCtx) {
+  disposeHexColumnMeshes(ctx.scene, ctx.hexColumns);
+}
+
 const FLOOR_LABEL: Record<LibraryFloorKey, string> = {
   f1: "1st floor",
   bs: "Basement",
 };
 
-/**
- * Append one floor’s rooms (and edges) to the scene.
- * @param yBoost — vertical shift (stacked: 1st floor sits above basement by STACK_GAP).
- * @param disambiguateIds — prefix room id with floor key (needed when EXIT ids repeat across floors).
- */
 function appendFloorRooms(
   ctx: ThreeCtx,
   floorKey: LibraryFloorKey,
@@ -256,7 +192,7 @@ function appendFloorRooms(
     );
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    const id = disambiguateIds ? `${floorTag} · ${r.id}` : r.id;
+    const id = disambiguateIds ? `${floorTag} \u00b7 ${r.id}` : r.id;
     mesh.userData = {
       id,
       note: disambiguateIds ? `${floorTag}: ${r.note}` : r.note,
@@ -286,120 +222,32 @@ function setStackedOrbitTarget(ctx: ThreeCtx) {
   ctx.target.set((f1.target.x + bs.target.x) / 2, midY, (f1.target.z + bs.target.z) / 2);
 }
 
-function disposeHeatPin(ctx: ThreeCtx) {
-  if (!ctx.heatPin) return;
-  ctx.scene.remove(ctx.heatPin);
-  ctx.heatPin.geometry.dispose();
-  (ctx.heatPin.material as THREE.Material).dispose();
-  ctx.heatPin = null;
+function createHexColumns(ctx: ThreeCtx, bsYOffset: number, f1YOffset: number | null) {
+  createJohnAbbottActivityHexes(ctx.scene, ctx.hexColumns, bsYOffset, f1YOffset);
 }
 
-/**
- * Create a glowing heatmap pin on the basement corridor (room 003 area).
- * Uses THREE.Points with additive blending for a heat glow effect.
- */
-function createHeatPin(ctx: ThreeCtx, yOffset: number) {
-  disposeHeatPin(ctx);
-
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const jit = () => (Math.random() - 0.5) * 0.3;
-
-  // Room 003 corridor area in scene coords (using SCALE)
-  const hx = 0 * SCALE;
-  const hz = 60 * SCALE;
-  const hw = 80 * SCALE;
-  const hd = 140 * SCALE;
-  const cx = hx + hw / 2;
-  const cz = hz + hd / 2;
-
-  // Ground heat patch
-  const step = 0.8;
-  for (let x = hx; x <= hx + hw; x += step) {
-    for (let z = hz; z <= hz + hd; z += step) {
-      const dx = (x - cx) / (hw / 2);
-      const dz = (z - cz) / (hd / 2);
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      const heat = Math.max(0, 1 - dist * 0.7);
-      positions.push(x + jit(), yOffset + 0.5 + jit() * 0.15, z + jit());
-      colors.push(0.9 + heat * 0.1, 0.15 + heat * 0.55, 0.03 + (1 - heat) * 0.08);
-      if (Math.random() < 0.3) {
-        positions.push(x + jit(), yOffset + 1.5 + Math.random() * 2, z + jit());
-        colors.push(0.7, 0.3, 0.05);
-      }
-    }
-  }
-
-  // Outline
-  const corners: [number, number][] = [[hx, hz], [hx + hw, hz], [hx + hw, hz + hd], [hx, hz + hd]];
-  for (let i = 0; i < 4; i++) {
-    const [ax, az] = corners[i];
-    const [bx, bz] = corners[(i + 1) % 4];
-    const len = Math.hypot(bx - ax, bz - az);
-    const steps = Math.ceil(len / 0.4);
-    for (let s = 0; s <= steps; s++) {
-      const t = s / steps;
-      positions.push(ax + (bx - ax) * t + jit() * 0.5, yOffset + 0.5, az + (bz - az) * t + jit() * 0.5);
-      colors.push(1.0, 0.4, 0.08);
-    }
-  }
-
-  // Pin column
-  const pinH = 40;
-  for (let y = 0; y <= pinH; y += 0.5) {
-    const t = y / pinH;
-    const r = 3 * (1 - t * 0.7);
-    const n = Math.max(3, Math.floor(10 * (1 - t * 0.5)));
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + Math.random() * 0.5;
-      const rad = r * (0.4 + Math.random() * 0.6);
-      positions.push(cx + Math.cos(a) * rad, yOffset + 0.5 + y + jit() * 0.3, cz + Math.sin(a) * rad);
-      colors.push(0.95 - t * 0.45, 0.3 + t * 0.2, 0.05 + t * 0.25);
-    }
-  }
-
-  // Pin head sphere
-  const headY = yOffset + 0.5 + pinH;
-  for (let i = 0; i < 400; i++) {
-    const th = Math.random() * Math.PI * 2;
-    const ph = Math.random() * Math.PI;
-    const r = 5 * (0.5 + Math.random() * 0.5);
-    positions.push(cx + r * Math.sin(ph) * Math.cos(th), headY + r * Math.cos(ph), cz + r * Math.sin(ph) * Math.sin(th));
-    colors.push(1.0, 0.5, 0.12);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  const mat = new THREE.PointsMaterial({
-    size: 1.2,
-    vertexColors: true,
-    sizeAttenuation: true,
-    transparent: true,
-    opacity: 0.95,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  ctx.heatPin = new THREE.Points(geo, mat);
-  ctx.scene.add(ctx.heatPin);
-}
+// ---------------------------------------------------------------------------
+// Build scene
+// ---------------------------------------------------------------------------
 
 function buildScene(ctx: ThreeCtx, mode: ViewMode) {
   clearRooms(ctx);
-  disposeHeatPin(ctx);
+  disposeHexColumns(ctx);
 
   if (mode === "stacked") {
     appendFloorRooms(ctx, "bs", 0, true);
     appendFloorRooms(ctx, "f1", STACK_GAP, true);
-    createHeatPin(ctx, 0); // basement is at yOffset 0 in stacked mode
+    createHexColumns(ctx, 0, STACK_GAP);
     setStackedOrbitTarget(ctx);
   } else if (mode === "bs") {
     appendFloorRooms(ctx, mode, 0, false);
-    createHeatPin(ctx, 0);
+    createHexColumns(ctx, 0, null);
     const floor = JOHN_ABBOTT_3D_FLOORS[mode];
     ctx.target.set(floor.target.x, floor.target.y, floor.target.z);
   } else {
     appendFloorRooms(ctx, mode, 0, false);
+    const f1Offset = mode === "f1" ? 0 : null;
+    createHexColumns(ctx, 0, f1Offset);
     const floor = JOHN_ABBOTT_3D_FLOORS[mode];
     ctx.target.set(floor.target.x, floor.target.y, floor.target.z);
   }
@@ -410,7 +258,6 @@ function buildScene(ctx: ThreeCtx, mode: ViewMode) {
 const ZOOM_RADIUS_MIN = 120;
 const ZOOM_RADIUS_MAX = 1750;
 
-/** Idle showcase: orbit rate (rad/s) and gentle target bob (world units). */
 const IDLE_ROT_RAD_PER_SEC = 0.085;
 const IDLE_BOB_FREQ = 0.72;
 const IDLE_BOB_AMP = 5.5;
@@ -459,22 +306,20 @@ function pickHover(ctx: ThreeCtx, clientX: number, clientY: number) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export function JohnAbbottLibraryFloorThree({
   className,
   cornerActions,
   canvasChildren,
-  /** Homography corridor heat from `/api/analyze-floorplan` (data URL) — shown on the ground slab. */
   motionHeatOverlayUrl = null,
-  /**
-   * Dashboard embed: locked stacked basement + 1st floor, minimal chrome (no floor tabs / room footer).
-   */
   layoutVariant = "default",
-  /** Fill parent height (dashboard column); uses host rect height for WebGL size instead of 3:2 aspect. */
   fillColumn = false,
 }: {
   className?: string;
   cornerActions?: ReactNode;
-  /** Optional content rendered inside the canvas host at z-30 (e.g. calibration click overlay). */
   canvasChildren?: ReactNode;
   motionHeatOverlayUrl?: string | null;
   layoutVariant?: "default" | "stackedEmbed";
@@ -503,7 +348,6 @@ export function JohnAbbottLibraryFloorThree({
 
     const scene = new THREE.Scene();
     const transparentBg = layoutVariant === "stackedEmbed";
-    /** Further back at first paint (stacked needs more vertical framing). */
     const defaultOrbitRadius = transparentBg ? 1280 : 1000;
     scene.background = transparentBg ? null : new THREE.Color(0x0c0f14);
 
@@ -564,7 +408,7 @@ export function JohnAbbottLibraryFloorThree({
       drag: false,
       prev: { x: 0, y: 0 },
       heatOverlay: null,
-      heatPin: null,
+      hexColumns: [],
       idleT: 0,
       idleBaseTarget: new THREE.Vector3(380, 0, 180),
       idleBaseTheta: 0.6,
@@ -573,9 +417,16 @@ export function JohnAbbottLibraryFloorThree({
 
     syncIdleAnchors(ctx);
 
-    const screenLabelEntries: StackedScreenLabel[] = [];
+    // Area labels (existing room labels)
+    const screenLabelEntries: CanvasWorldLabel[] = [];
     let screenLabelLayer: HTMLDivElement | null = null;
+
+    // Zone labels layer (hex heatmap zones)
+    const zoneLabelEntries: CanvasWorldLabel[] = [];
+    let zoneLabelLayer: HTMLDivElement | null = null;
+
     if (stackedEmbed) {
+      // Existing area labels
       screenLabelLayer = document.createElement("div");
       screenLabelLayer.className =
         "pointer-events-none absolute inset-0 z-[28] overflow-visible";
@@ -603,6 +454,33 @@ export function JohnAbbottLibraryFloorThree({
         screenLabelEntries.push({ el, world: m.world });
       }
       host.appendChild(screenLabelLayer);
+
+      // Zone labels for hex heatmap
+      zoneLabelLayer = document.createElement("div");
+      zoneLabelLayer.className =
+        "pointer-events-none absolute inset-0 z-[29] overflow-visible";
+      const zoneAnchors = getZoneLabelAnchors(0, STACK_GAP);
+      for (const z of zoneAnchors) {
+        const el = document.createElement("div");
+        el.dataset.zoneLabel = z.id;
+        el.className =
+          "absolute left-0 top-0 flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-black/60 px-2.5 py-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-lg";
+        el.style.willChange = "transform, opacity";
+        const dot = document.createElement("span");
+        dot.style.width = "8px";
+        dot.style.height = "8px";
+        dot.style.borderRadius = "50%";
+        dot.style.backgroundColor = z.accent;
+        dot.style.boxShadow = `0 0 8px ${z.accent}`;
+        const txt = document.createElement("span");
+        txt.className = "text-[10px] font-semibold tracking-wide text-white/80";
+        txt.textContent = z.label;
+        el.appendChild(dot);
+        el.appendChild(txt);
+        zoneLabelLayer.appendChild(el);
+        zoneLabelEntries.push({ el, world: z.world });
+      }
+      host.appendChild(zoneLabelLayer);
     }
 
     ctx.resizeObserver.observe(host);
@@ -622,9 +500,15 @@ export function JohnAbbottLibraryFloorThree({
         ctx.target.z = ctx.idleBaseTarget.z;
         updateCamera(ctx);
       }
+      if (ctx.hexColumns.length > 0) {
+        pulseHexColumns(ctx.hexColumns, ctx.idleT);
+      }
       renderer.render(scene, camera);
       if (screenLabelEntries.length) {
-        updateStackedScreenLabels(camera, canvas, screenLabelEntries);
+        updateCanvasWorldLabels(camera, canvas, screenLabelEntries);
+      }
+      if (zoneLabelEntries.length) {
+        updateCanvasWorldLabels(camera, canvas, zoneLabelEntries);
       }
     };
     loop();
@@ -687,7 +571,6 @@ export function JohnAbbottLibraryFloorThree({
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointerleave", onPointerUp);
-    /** Host-level wheel: calibration overlay sits above the canvas and would otherwise eat scroll-zoom. */
     host.addEventListener("wheel", onWheel, { passive: false });
 
     const w0 = host.clientWidth || 640;
@@ -709,8 +592,9 @@ export function JohnAbbottLibraryFloorThree({
       canvas.removeEventListener("pointerleave", onPointerUp);
       host.removeEventListener("wheel", onWheel);
       screenLabelLayer?.remove();
+      zoneLabelLayer?.remove();
       disposeHeatOverlay(ctx);
-      disposeHeatPin(ctx);
+      disposeHexColumns(ctx);
       clearRooms(ctx);
       scene.remove(amb);
       scene.remove(sun);
@@ -774,17 +658,13 @@ export function JohnAbbottLibraryFloorThree({
           mesh.renderOrder = 2;
           mesh.frustumCulled = false;
           mesh.name = "motionHeatOverlay";
-          mesh.raycast = () => {
-            /* slab is for display only — room picking uses ctx.meshes */
-          };
+          mesh.raycast = () => {};
 
           ctx.scene.add(mesh);
           ctx.heatOverlay = mesh;
         },
         undefined,
-        () => {
-          /* decode / CORS issues — leave floor without heat */
-        },
+        () => {},
       );
     };
 
@@ -841,14 +721,14 @@ export function JohnAbbottLibraryFloorThree({
           </div>
           <p className="text-[10px] tracking-wide text-white/35">
             {canvasChildren
-              ? "Drag to orbit when not placing · Scroll to zoom · click plan corners"
+              ? "Drag to orbit when not placing \u00b7 Scroll to zoom \u00b7 click plan corners"
               : effectiveViewMode === "stacked"
                 ? motionHeatOverlayUrl
-                  ? "Stacked 3D · basement + 1st above · heat overlay · orbit / zoom / pick a room"
-                  : "Stacked 3D · basement + 1st floor above · orbit / zoom / pick a room"
+                  ? "Stacked 3D \u00b7 basement + 1st above \u00b7 heat overlay \u00b7 orbit / zoom / pick a room"
+                  : "Stacked 3D \u00b7 basement + 1st floor above \u00b7 orbit / zoom / pick a room"
                 : motionHeatOverlayUrl
-                  ? "Drag to orbit · Scroll to zoom · motion heat overlay · Click a room"
-                  : "Drag to orbit · Scroll to zoom · Click a room"}
+                  ? "Drag to orbit \u00b7 Scroll to zoom \u00b7 motion heat overlay \u00b7 Click a room"
+                  : "Drag to orbit \u00b7 Scroll to zoom \u00b7 Click a room"}
           </p>
         </div>
       ) : null}
@@ -876,26 +756,6 @@ export function JohnAbbottLibraryFloorThree({
             stackedEmbed && "bg-transparent",
           )}
         />
-        {stackedEmbed ? (
-          <div className="pointer-events-none absolute bottom-0 left-0 z-[32] max-w-[min(100%,20rem)] p-3">
-            <div className="pointer-events-auto rounded-2xl border border-white/[0.1] bg-gradient-to-br from-black/80 via-black/55 to-black/35 p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">Campus model</p>
-              <p className="mt-1 text-sm font-semibold tracking-tight text-white/95">John Abbott College</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-white/50">Herzberg Library · stacked 3D floors</p>
-              <a
-                href={JOHN_ABBOTT_COLLEGE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-sky-300/95 underline decoration-sky-400/40 underline-offset-2 transition-colors hover:text-sky-200 hover:decoration-sky-200/60"
-              >
-                johnabbott.qc.ca
-                <span className="text-white/35" aria-hidden>
-                  ↗
-                </span>
-              </a>
-            </div>
-          </div>
-        ) : null}
         {canvasChildren}
       </div>
 

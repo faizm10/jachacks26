@@ -193,7 +193,7 @@ export function BuildingVibePanel({
       </div>
 
       {/* Recent insights feed */}
-      <div className="mt-5 flex-1 overflow-y-auto">
+      {/* <div className="mt-5 flex-1 overflow-y-auto">
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30">
           Activity feed
         </p>
@@ -209,7 +209,7 @@ export function BuildingVibePanel({
             </li>
           ))}
         </ul>
-      </div>
+      </div> */}
     </GlassPanel>
   );
 }

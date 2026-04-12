@@ -294,7 +294,7 @@ export function CameraFeedPanel({ selectedUrl, onSelect }: CameraFeedPanelProps)
 
       {status === "loading" ? (
         <div className="mt-4 flex min-h-[220px] items-center justify-center rounded-2xl border border-white/[0.06] bg-black/40">
-          <motion.div
+        <motion.div
             className="h-8 w-8 rounded-full border-2 border-white/15 border-t-white/70"
             animate={{ rotate: 360 }}
             transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
@@ -339,7 +339,7 @@ export function CameraFeedPanel({ selectedUrl, onSelect }: CameraFeedPanelProps)
                 onExpand={setExpanded}
               />
             ))}
-          </div>
+      </div>
         </>
       )}
       {expanded ? (
