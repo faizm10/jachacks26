@@ -232,18 +232,25 @@ export function JohnAbbottLibraryFloorThree({
   canvasChildren,
   /** Homography corridor heat from `/api/analyze-floorplan` (data URL) — shown on the ground slab. */
   motionHeatOverlayUrl = null,
+  /**
+   * Dashboard embed: locked stacked basement + 1st floor, minimal chrome (no floor tabs / room footer).
+   */
+  layoutVariant = "default",
 }: {
   className?: string;
   cornerActions?: ReactNode;
   /** Optional content rendered inside the canvas host at z-30 (e.g. calibration click overlay). */
   canvasChildren?: ReactNode;
   motionHeatOverlayUrl?: string | null;
+  layoutVariant?: "default" | "stackedEmbed";
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<ThreeCtx | null>(null);
+  const stackedEmbed = layoutVariant === "stackedEmbed";
   const [viewMode, setViewMode] = useState<ViewMode>("f1");
   const [selected, setSelected] = useState<{ id: string; note: string } | null>(null);
+  const effectiveViewMode: ViewMode = stackedEmbed ? "stacked" : viewMode;
 
   const bumpZoom = useCallback((direction: 1 | -1) => {
     const ctx = ctxRef.current;
@@ -289,19 +296,6 @@ export function JohnAbbottLibraryFloorThree({
     const fill = new THREE.DirectionalLight(0x7eb8ff, 0.22);
     fill.position.set(-220, 280, 320);
     scene.add(fill);
-
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(FLOOR_SLAB.width, FLOOR_SLAB.depth),
-      new THREE.MeshStandardMaterial({
-        color: 0x111822,
-        roughness: 0.95,
-        metalness: 0.02,
-      }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(FLOOR_SLAB.cx, FLOOR_SLAB.cyGround, FLOOR_SLAB.cz);
-    ground.receiveShadow = true;
-    scene.add(ground);
 
     const ctx: ThreeCtx = {
       scene,
@@ -411,9 +405,6 @@ export function JohnAbbottLibraryFloorThree({
       host.removeEventListener("wheel", onWheel);
       disposeHeatOverlay(ctx);
       clearRooms(ctx);
-      ground.geometry.dispose();
-      (ground.material as THREE.Material).dispose();
-      scene.remove(ground);
       scene.remove(amb);
       scene.remove(sun);
       scene.remove(fill);
@@ -426,10 +417,10 @@ export function JohnAbbottLibraryFloorThree({
     const id = requestAnimationFrame(() => {
       const ctx = ctxRef.current;
       if (!ctx) return;
-      buildScene(ctx, viewMode);
+      buildScene(ctx, effectiveViewMode);
     });
     return () => cancelAnimationFrame(id);
-  }, [viewMode]);
+  }, [effectiveViewMode]);
 
   useEffect(() => {
     if (!motionHeatOverlayUrl) {
@@ -501,59 +492,62 @@ export function JohnAbbottLibraryFloorThree({
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div
-          className="inline-flex gap-0.5 rounded-lg border border-white/[0.08] bg-black/40 p-0.5"
-          role="tablist"
-          aria-label="Library floor"
-        >
-          {(
-            [
-              ["f1", "1st floor"],
-              ["bs", "Basement"],
-              ["stacked", "Stacked"],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={viewMode === key}
-              onClick={() => {
-                setViewMode(key);
-                setSelected(null);
-              }}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                viewMode === key
-                  ? "bg-white/[0.12] text-white shadow-sm"
-                  : "text-white/45 hover:bg-white/[0.06] hover:text-white/75",
-              )}
-            >
-              {label}
-            </button>
-          ))}
+      {!stackedEmbed ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div
+            className="inline-flex gap-0.5 rounded-lg border border-white/[0.08] bg-black/40 p-0.5"
+            role="tablist"
+            aria-label="Library floor"
+          >
+            {(
+              [
+                ["f1", "1st floor"],
+                ["bs", "Basement"],
+                ["stacked", "Stacked"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={viewMode === key}
+                onClick={() => {
+                  setViewMode(key);
+                  setSelected(null);
+                }}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  viewMode === key
+                    ? "bg-white/[0.12] text-white shadow-sm"
+                    : "text-white/45 hover:bg-white/[0.06] hover:text-white/75",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] tracking-wide text-white/35">
+            {canvasChildren
+              ? "Drag to orbit when not placing · Scroll or +/- to zoom · click plan corners"
+              : effectiveViewMode === "stacked"
+                ? motionHeatOverlayUrl
+                  ? "Stacked 3D · basement + 1st above · heat overlay · orbit / zoom / pick a room"
+                  : "Stacked 3D · basement + 1st floor above · orbit / zoom / pick a room"
+                : motionHeatOverlayUrl
+                  ? "Drag to orbit · Scroll to zoom · motion heat overlay · Click a room"
+                  : "Drag to orbit · Scroll to zoom · Click a room"}
+          </p>
         </div>
-        <p className="text-[10px] tracking-wide text-white/35">
-          {canvasChildren
-            ? "Drag to orbit when not placing · Scroll or +/- to zoom · click plan corners"
-            : viewMode === "stacked"
-              ? motionHeatOverlayUrl
-                ? "Stacked 3D · basement + 1st above · heat on ground · orbit / zoom / pick a room"
-                : "Stacked 3D · basement + 1st floor above · orbit / zoom / pick a room"
-              : motionHeatOverlayUrl
-                ? "Drag to orbit · Scroll to zoom · motion heat on ground · Click a room"
-                : "Drag to orbit · Scroll to zoom · Click a room"}
-        </p>
-      </div>
+      ) : null}
 
       <div
         ref={hostRef}
         className="relative aspect-[3/2] w-full overflow-hidden rounded-xl border border-white/[0.06] bg-[#0c0f14]"
+        aria-label="Stacked 3D library floors"
       >
-        {(cornerActions || canvasChildren) && (
+        {(stackedEmbed || cornerActions || canvasChildren) && (
           <div className="pointer-events-none absolute right-2 top-2 z-40 flex flex-col items-end gap-1">
-            {canvasChildren ? (
+            {stackedEmbed || canvasChildren ? (
               <div className="pointer-events-auto flex flex-col overflow-hidden rounded-lg border border-white/[0.12] bg-black/70 shadow-lg backdrop-blur-sm">
                 <button
                   type="button"
@@ -593,20 +587,22 @@ export function JohnAbbottLibraryFloorThree({
         {canvasChildren}
       </div>
 
-      <div className="rounded-xl border border-white/[0.08] bg-black/35 px-3 py-2.5">
-        {selected ? (
-          <>
-            <p className="text-sm font-medium text-white/90">{selected.id}</p>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-white/50">{selected.note}</p>
-            <p className="mt-2 text-[10px] text-white/35">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
-          </>
-        ) : (
-          <>
-            <p className="text-sm font-medium text-white/75">Select a room</p>
-            <p className="mt-0.5 text-[11px] text-white/40">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
-          </>
-        )}
-      </div>
+      {!stackedEmbed ? (
+        <div className="rounded-xl border border-white/[0.08] bg-black/35 px-3 py-2.5">
+          {selected ? (
+            <>
+              <p className="text-sm font-medium text-white/90">{selected.id}</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-white/50">{selected.note}</p>
+              <p className="mt-2 text-[10px] text-white/35">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-white/75">Select a room</p>
+              <p className="mt-0.5 text-[11px] text-white/40">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
+            </>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

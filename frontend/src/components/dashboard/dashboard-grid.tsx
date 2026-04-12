@@ -55,17 +55,7 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
       {/* ═══ HERO: Floor map + Building vibe ═══ */}
       <div className="grid gap-6 lg:grid-cols-12">
         <motion.div variants={block} className="lg:col-span-7">
-          <FloorOverviewPanel
-            cells={snapshot.heatmap}
-            heatmapSubtitle={
-              cameraRegion
-                ? `${cameraRegion.label} — perspective-corrected`
-                : "Building activity overview"
-            }
-            peakCaption={null}
-            cameraRegion={cameraRegion}
-            activeFloorHint={selectedCameraId}
-          />
+          <FloorOverviewPanel cameraRegion={cameraRegion} />
         </motion.div>
         <motion.div variants={block} className="lg:col-span-5">
           <BuildingVibePanel stats={snapshot.stats} insights={snapshot.insights} />
