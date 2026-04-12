@@ -2,8 +2,8 @@
 
 import {
   JOHN_ABBOTT_3D_FLOORS,
+  JOHN_ABBOTT_LIBRARY_STACK_GAP as STACK_GAP,
   JOHN_ABBOTT_LIBRARY_SUBTITLE,
-  type LibraryFloorKey,
   type LibraryRoom3D,
 } from "@/lib/spatial/john-abbott-library-3d-data";
 import { cn } from "@/lib/utils";
@@ -13,14 +13,18 @@ import * as THREE from "three";
 /* ── Constants ── */
 
 const SCALE = 0.9;
-const STACK_GAP = 58;
 const POINT_SIZE = 0.7;
+
+/** Match `john-abbott-library-floor-three` stacked embed defaults. */
+const ZOOM_RADIUS_MIN = 120;
+const ZOOM_RADIUS_MAX = 1750;
+const IDLE_ROT_RAD_PER_SEC = 0.085;
+const IDLE_BOB_FREQ = 0.72;
+const IDLE_BOB_AMP = 5.5;
 
 /** Base gray intensity for all points — slight variation per-point for organic feel. */
 const BASE_GRAY = 0.38;
 const GRAY_VARIANCE = 0.12;
-
-type FloorFocus = "all" | LibraryFloorKey;
 
 /* ── LiDAR-style point sampling ── */
 
@@ -31,10 +35,8 @@ type FloorFocus = "all" | LibraryFloorKey;
 function sampleRoomWalls(
   room: LibraryRoom3D,
   yOffset: number,
-  floorKey: LibraryFloorKey,
   positions: number[],
   colors: number[],
-  floors: LibraryFloorKey[],
 ) {
   const x0 = room.x * SCALE;
   const z0 = room.z * SCALE;
@@ -59,7 +61,6 @@ function sampleRoomWalls(
     positions.push(x, y, z);
     const g = gray();
     colors.push(g, g, g);
-    floors.push(floorKey);
   };
 
   // ── 4 walls (dense) ──
@@ -127,9 +128,8 @@ function sampleRoomWalls(
 function generateAllPoints() {
   const positions: number[] = [];
   const colors: number[] = [];
-  const floors: LibraryFloorKey[] = [];
 
-  const floorConfigs: [LibraryFloorKey, number][] = [
+  const floorConfigs: [keyof typeof JOHN_ABBOTT_3D_FLOORS, number][] = [
     ["bs", 0],
     ["f1", STACK_GAP],
   ];
@@ -137,14 +137,13 @@ function generateAllPoints() {
   for (const [floorKey, yOff] of floorConfigs) {
     const floor = JOHN_ABBOTT_3D_FLOORS[floorKey];
     for (const room of floor.rooms) {
-      sampleRoomWalls(room, yOff, floorKey, positions, colors, floors);
+      sampleRoomWalls(room, yOff, positions, colors);
     }
   }
 
   return {
     positions: new Float32Array(positions),
     colors: new Float32Array(colors),
-    floors,
     count: positions.length / 3,
   };
 }
@@ -156,56 +155,46 @@ interface SceneCtx {
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   points: THREE.Points;
-  baseColors: Float32Array;
-  floors: LibraryFloorKey[];
   spherical: { theta: number; phi: number; radius: number };
   target: THREE.Vector3;
   animId: number;
   drag: boolean;
   prev: { x: number; y: number };
+  idleT: number;
+  idleBaseTarget: THREE.Vector3;
+  idleBaseTheta: number;
+  lastFrameMs: number;
 }
 
+function syncIdleAnchors(ctx: SceneCtx) {
+  ctx.idleBaseTarget.copy(ctx.target);
+  ctx.idleBaseTheta = ctx.spherical.theta;
+  ctx.idleT = 0;
+}
+
+/** Same spherical orbit as the solid Herzberg model. */
 function updateCamera(ctx: SceneCtx) {
   const { spherical, target, camera } = ctx;
   const x = target.x + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
-  const y = target.y + spherical.radius * Math.cos(spherical.phi);
+  const y = spherical.radius * Math.cos(spherical.phi);
   const z = target.z + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
   camera.position.set(x, y, z);
   camera.lookAt(target);
 }
 
-function applyFocus(ctx: SceneCtx, focus: FloorFocus) {
-  const geo = ctx.points.geometry;
-  const colorAttr = geo.getAttribute("color") as THREE.BufferAttribute;
-  const arr = colorAttr.array as Float32Array;
-
-  for (let i = 0; i < ctx.floors.length; i++) {
-    const floorKey = ctx.floors[i];
-    const inFocus = focus === "all" || floorKey === focus;
-    const dim = inFocus ? 1.0 : 0.1;
-    arr[i * 3] = ctx.baseColors[i * 3] * dim;
-    arr[i * 3 + 1] = ctx.baseColors[i * 3 + 1] * dim;
-    arr[i * 3 + 2] = ctx.baseColors[i * 3 + 2] * dim;
-  }
-  colorAttr.needsUpdate = true;
-
-  if (focus === "all") {
-    ctx.target.set(380, STACK_GAP * 0.5, 180);
-  } else if (focus === "f1") {
-    ctx.target.set(380, STACK_GAP, 180);
-  } else {
-    ctx.target.set(400, 0, 160);
-  }
-  updateCamera(ctx);
-}
-
 /* ── Component ── */
 
-export function PointCloudFloorPlan({ className }: { className?: string }) {
+export function PointCloudFloorPlan({
+  className,
+  /** Match dashboard column: size WebGL from host height instead of 3:2 aspect. */
+  fillColumn = false,
+}: {
+  className?: string;
+  fillColumn?: boolean;
+}) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<SceneCtx | null>(null);
-  const [focus, setFocus] = useState<FloorFocus>("all");
   const [pointCount, setPointCount] = useState(0);
 
   const setSize = useCallback((ctx: SceneCtx, w: number, h: number) => {
@@ -221,10 +210,15 @@ export function PointCloudFloorPlan({ className }: { className?: string }) {
     if (!host || !canvas) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0c0f14);
+    scene.background = null;
 
     const camera = new THREE.PerspectiveCamera(38, 16 / 9, 1, 5000);
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      premultipliedAlpha: false,
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     // Lighting
@@ -251,36 +245,68 @@ export function PointCloudFloorPlan({ className }: { className?: string }) {
     const points = new THREE.Points(geo, mat);
     scene.add(points);
 
+    const f1 = JOHN_ABBOTT_3D_FLOORS.f1;
+    const bs = JOHN_ABBOTT_3D_FLOORS.bs;
+    const midY = STACK_GAP * 0.52;
+    const orbitTarget = new THREE.Vector3(
+      (f1.target.x + bs.target.x) / 2,
+      midY,
+      (f1.target.z + bs.target.z) / 2,
+    );
+
+    const defaultOrbitRadius = fillColumn ? 1280 : 1000;
+
     const ctx: SceneCtx = {
       scene,
       camera,
       renderer,
       points,
-      baseColors: data.colors,
-      floors: data.floors,
-      spherical: { theta: 0.6, phi: 0.75, radius: 650 },
-      target: new THREE.Vector3(380, STACK_GAP * 0.5, 180),
+      spherical: { theta: 0.6, phi: 1.0, radius: defaultOrbitRadius },
+      target: orbitTarget.clone(),
       animId: 0,
       drag: false,
       prev: { x: 0, y: 0 },
+      idleT: 0,
+      idleBaseTarget: orbitTarget.clone(),
+      idleBaseTheta: 0.6,
+      lastFrameMs: performance.now(),
     };
 
+    syncIdleAnchors(ctx);
     updateCamera(ctx);
 
     // Resize
     const ro = new ResizeObserver((entries) => {
       const cr = entries[0]?.contentRect;
       if (!cr?.width) return;
-      setSize(ctx, cr.width, Math.round((cr.width * 2) / 3));
+      const h =
+        fillColumn && cr.height >= 80 ? Math.floor(cr.height) : Math.round((cr.width * 2) / 3);
+      setSize(ctx, cr.width, h);
     });
     ro.observe(host);
 
     const w0 = host.clientWidth || 640;
-    setSize(ctx, w0, Math.round((w0 * 2) / 3));
+    const rect0 = host.getBoundingClientRect();
+    const h0 =
+      fillColumn && rect0.height >= 80
+        ? Math.floor(rect0.height)
+        : Math.round((w0 * 2) / 3);
+    setSize(ctx, w0, h0);
 
-    // Render loop
+    // Render loop — idle orbit + bob (paused while dragging), same as solid stacked view
     const loop = () => {
       ctx.animId = requestAnimationFrame(loop);
+      const now = performance.now();
+      const dt = Math.min(0.055, Math.max(0, (now - ctx.lastFrameMs) / 1000));
+      ctx.lastFrameMs = now;
+      if (!ctx.drag) {
+        ctx.idleT += dt;
+        ctx.spherical.theta = ctx.idleBaseTheta + ctx.idleT * IDLE_ROT_RAD_PER_SEC;
+        ctx.target.x = ctx.idleBaseTarget.x;
+        ctx.target.y = ctx.idleBaseTarget.y + Math.sin(ctx.idleT * IDLE_BOB_FREQ) * IDLE_BOB_AMP;
+        ctx.target.z = ctx.idleBaseTarget.z;
+        updateCamera(ctx);
+      }
       renderer.render(scene, camera);
     };
     loop();
@@ -293,23 +319,38 @@ export function PointCloudFloorPlan({ className }: { className?: string }) {
     };
 
     const onPointerMove = (e: PointerEvent) => {
-      if (e.buttons !== 1) return;
       const dx = e.clientX - ctx.prev.x;
       const dy = e.clientY - ctx.prev.y;
-      ctx.drag = true;
-      ctx.spherical.theta -= dx * 0.008;
-      ctx.spherical.phi = Math.max(0.15, Math.min(1.5, ctx.spherical.phi + dy * 0.008));
-      updateCamera(ctx);
+      if (e.buttons === 1) {
+        ctx.drag = true;
+        ctx.spherical.theta -= dx * 0.008;
+        ctx.spherical.phi = Math.max(0.2, Math.min(1.45, ctx.spherical.phi + dy * 0.008));
+        updateCamera(ctx);
+      }
       ctx.prev = { x: e.clientX, y: e.clientY };
     };
 
     const onPointerUp = (e: PointerEvent) => {
-      try { canvas.releasePointerCapture(e.pointerId); } catch { /* */ }
+      const wasDrag = ctx.drag;
+      if (wasDrag) {
+        ctx.idleBaseTheta = ctx.spherical.theta;
+        ctx.idleBaseTarget.copy(ctx.target);
+        ctx.idleT = 0;
+      }
+      ctx.drag = false;
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
     };
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      ctx.spherical.radius = Math.max(150, Math.min(1200, ctx.spherical.radius + e.deltaY * 0.45));
+      ctx.spherical.radius = Math.max(
+        ZOOM_RADIUS_MIN,
+        Math.min(ZOOM_RADIUS_MAX, ctx.spherical.radius + e.deltaY * 0.45),
+      );
       updateCamera(ctx);
     };
 
@@ -334,64 +375,37 @@ export function PointCloudFloorPlan({ className }: { className?: string }) {
       renderer.dispose();
       ctxRef.current = null;
     };
-  }, [setSize]);
-
-  // Apply focus
-  useEffect(() => {
-    const ctx = ctxRef.current;
-    if (!ctx) return;
-    applyFocus(ctx, focus);
-  }, [focus]);
+  }, [setSize, fillColumn]);
 
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div
-          className="inline-flex gap-0.5 rounded-lg border border-white/[0.08] bg-black/40 p-0.5"
-          role="tablist"
-          aria-label="Floor focus"
-        >
-          {(
-            [
-              ["all", "All floors"],
-              ["f1", "1st floor"],
-              ["bs", "Basement"],
-            ] as [FloorFocus, string][]
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={focus === key}
-              onClick={() => setFocus(key)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                focus === key
-                  ? "bg-white/[0.12] text-white shadow-sm"
-                  : "text-white/45 hover:bg-white/[0.06] hover:text-white/75",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+    <div
+      className={cn(
+        "flex flex-col gap-2",
+        fillColumn && "h-full min-h-0 flex-1",
+        className,
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <div className="flex items-center gap-2">
           <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-200/80">
             {(pointCount / 1000).toFixed(1)}K points
           </span>
-          <p className="text-[10px] tracking-wide text-white/35">
-            Drag to orbit · scroll to zoom
-          </p>
+          <p className="text-[10px] tracking-wide text-white/35">Drag to orbit · scroll to zoom</p>
         </div>
       </div>
 
       <div
         ref={hostRef}
-        className="relative aspect-[3/2] w-full overflow-hidden rounded-xl border border-white/[0.06] bg-[#0c0f14]"
+        className={cn(
+          "relative w-full overflow-hidden bg-transparent",
+          fillColumn
+            ? "min-h-0 flex-1 rounded-none border-0"
+            : "aspect-[3/2] rounded-xl border border-white/[0.06]",
+        )}
       >
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 h-full w-full cursor-grab touch-none active:cursor-grabbing"
+          className="absolute inset-0 h-full w-full cursor-grab touch-none bg-transparent active:cursor-grabbing"
         />
       </div>
 
