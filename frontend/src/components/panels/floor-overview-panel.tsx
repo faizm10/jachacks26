@@ -4,5 +4,9 @@ import { JohnAbbottLibraryFloorThree } from "@/components/spatial-map/john-abbot
 import type { CameraRegion } from "@/lib/camera-regions";
 
 export function FloorOverviewPanel({ cameraRegion: _cameraRegion }: { cameraRegion: CameraRegion | null }) {
-  return <JohnAbbottLibraryFloorThree layoutVariant="stackedEmbed" />;
+  return (
+    <div className="flex h-full min-h-0 w-full min-h-[420px] flex-col lg:min-h-[min(88vh,920px)]">
+      <JohnAbbottLibraryFloorThree layoutVariant="stackedEmbed" fillColumn className="min-h-0 flex-1" />
+    </div>
+  );
 }

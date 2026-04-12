@@ -16,7 +16,7 @@ const SCALE = 0.9;
 const HOVER_EMISSIVE = 0x4c6fa8;
 
 /** Vertical world-units between basement ceiling (~28u) and 1st-floor base in stacked view. */
-const STACK_GAP = 58;
+const STACK_GAP = 174;
 
 type ViewMode = LibraryFloorKey | "stacked";
 
@@ -53,6 +53,11 @@ interface ThreeCtx {
   prev: { x: number; y: number };
   /** Video-derived motion heat (RGBA); not used for room raycast. */
   heatOverlay: THREE.Mesh | null;
+  /** Seconds accumulated for idle orbit + bob (paused while `drag`). */
+  idleT: number;
+  idleBaseTarget: THREE.Vector3;
+  idleBaseTheta: number;
+  lastFrameMs: number;
 }
 
 function disposeMesh(m: THREE.Mesh) {
@@ -174,10 +179,22 @@ function buildScene(ctx: ThreeCtx, mode: ViewMode) {
     ctx.target.set(floor.target.x, floor.target.y, floor.target.z);
   }
   updateCamera(ctx);
+  syncIdleAnchors(ctx);
 }
 
 const ZOOM_RADIUS_MIN = 120;
-const ZOOM_RADIUS_MAX = 1100;
+const ZOOM_RADIUS_MAX = 1750;
+
+/** Idle showcase: orbit rate (rad/s) and gentle target bob (world units). */
+const IDLE_ROT_RAD_PER_SEC = 0.085;
+const IDLE_BOB_FREQ = 0.72;
+const IDLE_BOB_AMP = 5.5;
+
+function syncIdleAnchors(ctx: ThreeCtx) {
+  ctx.idleBaseTarget.copy(ctx.target);
+  ctx.idleBaseTheta = ctx.spherical.theta;
+  ctx.idleT = 0;
+}
 
 function updateCamera(ctx: ThreeCtx) {
   const { spherical, target, camera } = ctx;
@@ -192,15 +209,6 @@ function applyWheelZoom(ctx: ThreeCtx, deltaY: number) {
   ctx.spherical.radius = Math.max(
     ZOOM_RADIUS_MIN,
     Math.min(ZOOM_RADIUS_MAX, ctx.spherical.radius + deltaY * 0.45),
-  );
-  updateCamera(ctx);
-}
-
-function applyButtonZoom(ctx: ThreeCtx, direction: 1 | -1) {
-  const step = 72;
-  ctx.spherical.radius = Math.max(
-    ZOOM_RADIUS_MIN,
-    Math.min(ZOOM_RADIUS_MAX, ctx.spherical.radius + direction * step),
   );
   updateCamera(ctx);
 }
@@ -236,6 +244,8 @@ export function JohnAbbottLibraryFloorThree({
    * Dashboard embed: locked stacked basement + 1st floor, minimal chrome (no floor tabs / room footer).
    */
   layoutVariant = "default",
+  /** Fill parent height (dashboard column); uses host rect height for WebGL size instead of 3:2 aspect. */
+  fillColumn = false,
 }: {
   className?: string;
   cornerActions?: ReactNode;
@@ -243,6 +253,7 @@ export function JohnAbbottLibraryFloorThree({
   canvasChildren?: ReactNode;
   motionHeatOverlayUrl?: string | null;
   layoutVariant?: "default" | "stackedEmbed";
+  fillColumn?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -251,12 +262,6 @@ export function JohnAbbottLibraryFloorThree({
   const [viewMode, setViewMode] = useState<ViewMode>("f1");
   const [selected, setSelected] = useState<{ id: string; note: string } | null>(null);
   const effectiveViewMode: ViewMode = stackedEmbed ? "stacked" : viewMode;
-
-  const bumpZoom = useCallback((direction: 1 | -1) => {
-    const ctx = ctxRef.current;
-    if (!ctx) return;
-    applyButtonZoom(ctx, direction);
-  }, []);
 
   const setSize = useCallback((ctx: ThreeCtx, w: number, h: number) => {
     const H = Math.max(120, h);
@@ -273,6 +278,8 @@ export function JohnAbbottLibraryFloorThree({
 
     const scene = new THREE.Scene();
     const transparentBg = layoutVariant === "stackedEmbed";
+    /** Further back at first paint (stacked needs more vertical framing). */
+    const defaultOrbitRadius = transparentBg ? 1280 : 1000;
     scene.background = transparentBg ? null : new THREE.Color(0x0c0f14);
 
     const camera = new THREE.PerspectiveCamera(38, 16 / 9, 1, 5000);
@@ -312,7 +319,7 @@ export function JohnAbbottLibraryFloorThree({
       target: new THREE.Vector3(380, 0, 180),
       meshes: [],
       edgeMeshes: [],
-      spherical: { theta: 0.6, phi: 1.0, radius: 400 },
+      spherical: { theta: 0.6, phi: 1.0, radius: defaultOrbitRadius },
       animId: 0,
       host,
       canvas,
@@ -320,7 +327,8 @@ export function JohnAbbottLibraryFloorThree({
         const cr = entries[0]?.contentRect;
         if (!cr?.width) return;
         const w = cr.width;
-        const h = Math.round((w * 2) / 3);
+        const h =
+          fillColumn && cr.height >= 80 ? Math.floor(cr.height) : Math.round((w * 2) / 3);
         setSize(ctx, w, h);
       }),
       onPointerMove: () => {},
@@ -331,12 +339,31 @@ export function JohnAbbottLibraryFloorThree({
       drag: false,
       prev: { x: 0, y: 0 },
       heatOverlay: null,
+      idleT: 0,
+      idleBaseTarget: new THREE.Vector3(380, 0, 180),
+      idleBaseTheta: 0.6,
+      lastFrameMs: performance.now(),
     };
+
+    syncIdleAnchors(ctx);
 
     ctx.resizeObserver.observe(host);
 
+    const enableIdleMotion = stackedEmbed;
+
     const loop = () => {
       ctx.animId = requestAnimationFrame(loop);
+      const now = performance.now();
+      const dt = Math.min(0.055, Math.max(0, (now - ctx.lastFrameMs) / 1000));
+      ctx.lastFrameMs = now;
+      if (!ctx.drag && enableIdleMotion) {
+        ctx.idleT += dt;
+        ctx.spherical.theta = ctx.idleBaseTheta + ctx.idleT * IDLE_ROT_RAD_PER_SEC;
+        ctx.target.x = ctx.idleBaseTarget.x;
+        ctx.target.y = ctx.idleBaseTarget.y + Math.sin(ctx.idleT * IDLE_BOB_FREQ) * IDLE_BOB_AMP;
+        ctx.target.z = ctx.idleBaseTarget.z;
+        updateCamera(ctx);
+      }
       renderer.render(scene, camera);
     };
     loop();
@@ -361,7 +388,14 @@ export function JohnAbbottLibraryFloorThree({
     };
 
     const onPointerUp = (e: PointerEvent) => {
-      if (!ctx.drag) {
+      const wasDrag = ctx.drag;
+      if (wasDrag) {
+        ctx.idleBaseTheta = ctx.spherical.theta;
+        ctx.idleBaseTarget.copy(ctx.target);
+        ctx.idleT = 0;
+      }
+      ctx.drag = false;
+      if (!wasDrag) {
         pickHover(ctx, e.clientX, e.clientY);
         ctx.raycaster.setFromCamera(ctx.mouse, ctx.camera);
         const hits = ctx.raycaster.intersectObjects(ctx.meshes);
@@ -396,7 +430,11 @@ export function JohnAbbottLibraryFloorThree({
     host.addEventListener("wheel", onWheel, { passive: false });
 
     const w0 = host.clientWidth || 640;
-    const h0 = Math.round((w0 * 2) / 3);
+    const rect0 = host.getBoundingClientRect();
+    const h0 =
+      fillColumn && rect0.height >= 80
+        ? Math.floor(rect0.height)
+        : Math.round((w0 * 2) / 3);
     setSize(ctx, w0, h0);
 
     ctxRef.current = ctx;
@@ -417,7 +455,7 @@ export function JohnAbbottLibraryFloorThree({
       renderer.dispose();
       ctxRef.current = null;
     };
-  }, [setSize, layoutVariant]);
+  }, [setSize, layoutVariant, fillColumn, stackedEmbed]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -497,7 +535,13 @@ export function JohnAbbottLibraryFloorThree({
   }, [motionHeatOverlayUrl]);
 
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div
+      className={cn(
+        "flex flex-col gap-2",
+        stackedEmbed && fillColumn && "h-full min-h-0 flex-1",
+        className,
+      )}
+    >
       {!stackedEmbed ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div
@@ -534,7 +578,7 @@ export function JohnAbbottLibraryFloorThree({
           </div>
           <p className="text-[10px] tracking-wide text-white/35">
             {canvasChildren
-              ? "Drag to orbit when not placing · Scroll or +/- to zoom · click plan corners"
+              ? "Drag to orbit when not placing · Scroll to zoom · click plan corners"
               : effectiveViewMode === "stacked"
                 ? motionHeatOverlayUrl
                   ? "Stacked 3D · basement + 1st above · heat overlay · orbit / zoom / pick a room"
@@ -549,48 +593,19 @@ export function JohnAbbottLibraryFloorThree({
       <div
         ref={hostRef}
         className={cn(
-          "relative aspect-[3/2] w-full overflow-hidden",
-          stackedEmbed
-            ? "rounded-none border-0 bg-transparent"
-            : "rounded-xl border border-white/[0.06] bg-[#0c0f14]",
+          "relative w-full overflow-hidden",
+          stackedEmbed && fillColumn && "min-h-0 flex-1",
+          stackedEmbed && !fillColumn && "aspect-[3/2]",
+          !stackedEmbed && "aspect-[3/2] rounded-xl border border-white/[0.06] bg-[#0c0f14]",
+          stackedEmbed && "rounded-none border-0 bg-transparent",
         )}
         aria-label={stackedEmbed ? "Stacked library floors, 3D" : "Library floor, 3D"}
       >
-        {(stackedEmbed || cornerActions || canvasChildren) && (
+        {cornerActions ? (
           <div className="pointer-events-none absolute right-2 top-2 z-40 flex flex-col items-end gap-1">
-            {stackedEmbed || canvasChildren ? (
-              <div className="pointer-events-auto flex flex-col overflow-hidden rounded-lg border border-white/[0.12] bg-black/70 shadow-lg backdrop-blur-sm">
-                <button
-                  type="button"
-                  aria-label="Zoom in"
-                  title="Zoom in"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    bumpZoom(-1);
-                  }}
-                  className="border-b border-white/[0.08] px-3 py-2 text-sm font-semibold text-white/90 transition-colors hover:bg-white/[0.08]"
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  aria-label="Zoom out"
-                  title="Zoom out"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    bumpZoom(1);
-                  }}
-                  className="px-3 py-2 text-sm font-semibold text-white/90 transition-colors hover:bg-white/[0.08]"
-                >
-                  −
-                </button>
-              </div>
-            ) : null}
-            {cornerActions ? (
-              <div className="pointer-events-auto z-20">{cornerActions}</div>
-            ) : null}
+            <div className="pointer-events-auto z-20">{cornerActions}</div>
           </div>
-        )}
+        ) : null}
         <canvas
           ref={canvasRef}
           className={cn(

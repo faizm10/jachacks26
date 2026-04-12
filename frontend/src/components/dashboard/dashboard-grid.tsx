@@ -53,8 +53,8 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
       className="mx-auto max-w-7xl space-y-6"
     >
       {/* ═══ HERO: Floor map + Building vibe ═══ */}
-      <div className="grid gap-6 lg:grid-cols-12">
-        <motion.div variants={block} className="lg:col-span-7">
+      <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
+        <motion.div variants={block} className="flex h-full min-h-0 flex-col lg:col-span-7">
           <FloorOverviewPanel cameraRegion={cameraRegion} />
         </motion.div>
         <motion.div variants={block} className="lg:col-span-5">
