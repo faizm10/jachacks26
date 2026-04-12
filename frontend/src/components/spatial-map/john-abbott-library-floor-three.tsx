@@ -15,6 +15,11 @@ import * as THREE from "three";
 const SCALE = 0.9;
 const HOVER_EMISSIVE = 0x4c6fa8;
 
+/** Vertical world-units between basement ceiling (~28u) and 1st-floor base in stacked view. */
+const STACK_GAP = 58;
+
+type ViewMode = LibraryFloorKey | "stacked";
+
 /** Ground slab — homography heat PNG is draped here (same transform as the dark floor). */
 const FLOOR_SLAB = {
   width: 1400,
@@ -86,9 +91,25 @@ function clearRooms(ctx: ThreeCtx) {
   ctx.edgeMeshes = [];
 }
 
-function buildRooms(ctx: ThreeCtx, floorKey: LibraryFloorKey) {
+const FLOOR_LABEL: Record<LibraryFloorKey, string> = {
+  f1: "1st floor",
+  bs: "Basement",
+};
+
+/**
+ * Append one floor’s rooms (and edges) to the scene.
+ * @param yBoost — vertical shift (stacked: 1st floor sits above basement by STACK_GAP).
+ * @param disambiguateIds — prefix room id with floor key (needed when EXIT ids repeat across floors).
+ */
+function appendFloorRooms(
+  ctx: ThreeCtx,
+  floorKey: LibraryFloorKey,
+  yBoost: number,
+  disambiguateIds: boolean,
+) {
   const floor = JOHN_ABBOTT_3D_FLOORS[floorKey];
   const mats = JOHN_ABBOTT_3D_MATS_DARK;
+  const floorTag = FLOOR_LABEL[floorKey];
 
   for (const r of floor.rooms) {
     const matDef = mats[r.type as LibraryRoomType];
@@ -105,14 +126,15 @@ function buildRooms(ctx: ThreeCtx, floorKey: LibraryFloorKey) {
     const mesh = new THREE.Mesh(geo, material);
     mesh.position.set(
       r.x * SCALE + (r.w * SCALE) / 2,
-      r.h * 5,
+      r.h * 5 + yBoost,
       r.z * SCALE + (r.d * SCALE) / 2,
     );
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    const id = disambiguateIds ? `${floorTag} · ${r.id}` : r.id;
     mesh.userData = {
-      id: r.id,
-      note: r.note,
+      id,
+      note: disambiguateIds ? `${floorTag}: ${r.note}` : r.note,
       baseEmissive: matDef.emissive,
       baseEmissiveIntensity: 0.12,
     };
@@ -130,13 +152,32 @@ function buildRooms(ctx: ThreeCtx, floorKey: LibraryFloorKey) {
     ctx.scene.add(line);
     ctx.edgeMeshes.push(line);
   }
+}
 
-  ctx.target.set(floor.target.x, floor.target.y, floor.target.z);
+function setStackedOrbitTarget(ctx: ThreeCtx) {
+  const f1 = JOHN_ABBOTT_3D_FLOORS.f1;
+  const bs = JOHN_ABBOTT_3D_FLOORS.bs;
+  const midY = STACK_GAP * 0.52;
+  ctx.target.set((f1.target.x + bs.target.x) / 2, midY, (f1.target.z + bs.target.z) / 2);
+}
+
+function buildScene(ctx: ThreeCtx, mode: ViewMode) {
+  clearRooms(ctx);
+
+  if (mode === "stacked") {
+    appendFloorRooms(ctx, "bs", 0, true);
+    appendFloorRooms(ctx, "f1", STACK_GAP, true);
+    setStackedOrbitTarget(ctx);
+  } else {
+    appendFloorRooms(ctx, mode, 0, false);
+    const floor = JOHN_ABBOTT_3D_FLOORS[mode];
+    ctx.target.set(floor.target.x, floor.target.y, floor.target.z);
+  }
   updateCamera(ctx);
 }
 
 const ZOOM_RADIUS_MIN = 120;
-const ZOOM_RADIUS_MAX = 920;
+const ZOOM_RADIUS_MAX = 1100;
 
 function updateCamera(ctx: ThreeCtx) {
   const { spherical, target, camera } = ctx;
@@ -201,7 +242,7 @@ export function JohnAbbottLibraryFloorThree({
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<ThreeCtx | null>(null);
-  const [floor, setFloor] = useState<LibraryFloorKey>("f1");
+  const [viewMode, setViewMode] = useState<ViewMode>("f1");
   const [selected, setSelected] = useState<{ id: string; note: string } | null>(null);
 
   const bumpZoom = useCallback((direction: 1 | -1) => {
@@ -385,11 +426,10 @@ export function JohnAbbottLibraryFloorThree({
     const id = requestAnimationFrame(() => {
       const ctx = ctxRef.current;
       if (!ctx) return;
-      clearRooms(ctx);
-      buildRooms(ctx, floor);
+      buildScene(ctx, viewMode);
     });
     return () => cancelAnimationFrame(id);
-  }, [floor]);
+  }, [viewMode]);
 
   useEffect(() => {
     if (!motionHeatOverlayUrl) {
@@ -471,20 +511,21 @@ export function JohnAbbottLibraryFloorThree({
             [
               ["f1", "1st floor"],
               ["bs", "Basement"],
+              ["stacked", "Stacked"],
             ] as const
           ).map(([key, label]) => (
             <button
               key={key}
               type="button"
               role="tab"
-              aria-selected={floor === key}
+              aria-selected={viewMode === key}
               onClick={() => {
-                setFloor(key);
+                setViewMode(key);
                 setSelected(null);
               }}
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                floor === key
+                viewMode === key
                   ? "bg-white/[0.12] text-white shadow-sm"
                   : "text-white/45 hover:bg-white/[0.06] hover:text-white/75",
               )}
@@ -496,9 +537,13 @@ export function JohnAbbottLibraryFloorThree({
         <p className="text-[10px] tracking-wide text-white/35">
           {canvasChildren
             ? "Drag to orbit when not placing · Scroll or +/- to zoom · click plan corners"
-            : motionHeatOverlayUrl
-              ? "Drag to orbit · Scroll to zoom · motion heat on ground · Click a room"
-              : "Drag to orbit · Scroll to zoom · Click a room"}
+            : viewMode === "stacked"
+              ? motionHeatOverlayUrl
+                ? "Stacked 3D · basement + 1st above · heat on ground · orbit / zoom / pick a room"
+                : "Stacked 3D · basement + 1st floor above · orbit / zoom / pick a room"
+              : motionHeatOverlayUrl
+                ? "Drag to orbit · Scroll to zoom · motion heat on ground · Click a room"
+                : "Drag to orbit · Scroll to zoom · Click a room"}
         </p>
       </div>
 
