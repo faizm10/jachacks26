@@ -40,5 +40,47 @@
     "floor_w": 1536,
     "floor_h": 1024,
     "label": "basement - coco "
+  },
+  "basement-hallway-2": {
+    "camera_id": "basement-hallway-2",
+    "camera_pts": [
+      [
+        92.5,
+        96.2
+      ],
+      [
+        57.8,
+        33.6
+      ],
+      [
+        43.3,
+        33.3
+      ],
+      [
+        9.3,
+        98.0
+      ]
+    ],
+    "floor_pts": [
+      [
+        14.1,
+        38.8
+      ],
+      [
+        43.7,
+        39.5
+      ],
+      [
+        43.5,
+        30.3
+      ],
+      [
+        13.9,
+        30.7
+      ]
+    ],
+    "floor_w": 1536,
+    "floor_h": 1024,
+    "label": "basement-hallway-2"
   }
 }

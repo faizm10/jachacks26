@@ -9,6 +9,7 @@ import {
   buildActivityHeatmapFromPersons,
   dominantActivityNearPeak,
 } from "@/lib/activity-heatmap";
+import { getCameraRegion } from "@/lib/camera-regions";
 import type { RoomSnapshot } from "@/lib/types/room";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -26,13 +27,15 @@ const block = {
 export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
   // User-selected feed — analysis only runs when they pick one
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
+  const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   /** Live insights person row → highlight matching bbox on AR / camera area. */
   const [highlightPersonId, setHighlightPersonId] = useState<string | null>(null);
 
   const handleSelect = useCallback(
-    (obj: { url: string }) => {
-      // Toggle: clicking the same feed deselects it
+    (obj: { url: string; path?: string }) => {
       setSelectedUrl((prev) => (prev === obj.url ? null : obj.url));
+      const camId = obj.path?.split("/").pop()?.replace(/\.[^.]+$/, "")?.trim().toLowerCase() ?? null;
+      setSelectedCameraId((prev) => (prev === camId ? null : camId));
       setHighlightPersonId(null);
     },
     [],
@@ -85,16 +88,23 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
     return insights.length > 0 ? insights : snapshot.insights;
   }, [analysis, snapshot.insights]);
 
+  const cameraRegion = useMemo(
+    () => (selectedCameraId ? getCameraRegion(selectedCameraId) : null),
+    [selectedCameraId],
+  );
+
   const behaviorHeatmapCells = useMemo(() => {
     if (analysis?.persons && analysis.persons.length > 0) {
-      return buildActivityHeatmapFromPersons(analysis.persons);
+      return buildActivityHeatmapFromPersons(analysis.persons, cameraRegion);
     }
     return snapshot.heatmap;
-  }, [analysis?.persons, snapshot.heatmap]);
+  }, [analysis?.persons, snapshot.heatmap, cameraRegion]);
 
   const heatmapSubtitle =
     analysis?.persons && analysis.persons.length > 0
-      ? "From AI labels — refreshes while you watch (~every 3s); brighter = more overlap in the current frame"
+      ? cameraRegion
+        ? `${cameraRegion.label} — perspective-corrected ${cameraRegion.region.w}×${cameraRegion.region.h} region`
+        : "From AI labels — raw camera-space mapping"
       : "Aggregated movement density (demo)";
 
   const heatmapPeakCaption = useMemo(() => {
@@ -129,6 +139,7 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
             cells={behaviorHeatmapCells}
             subtitle={heatmapSubtitle}
             peakCaption={analysis?.persons?.length ? heatmapPeakCaption : null}
+            cameraRegion={cameraRegion}
           />
         </motion.div>
         <motion.div variants={block} className="space-y-6 lg:col-span-5">
