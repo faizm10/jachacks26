@@ -39,26 +39,58 @@ export function Sidebar({
         onClick={onNavigate}
       />
 
-      {/* Floating sidebar — vertically centered on desktop */}
+      {/* Mobile: slide-down drawer */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-full w-[240px] flex-col transition-transform duration-300 ease-out lg:hidden",
-          "border-r border-white/[0.06] bg-[rgba(8,10,14,0.92)] backdrop-blur-2xl",
-          open ? "translate-x-0" : "-translate-x-full",
+          "fixed left-0 right-0 top-0 z-50 flex flex-col transition-transform duration-300 ease-out lg:hidden",
+          "border-b border-white/6 bg-[rgba(8,10,14,0.95)] backdrop-blur-2xl",
+          open ? "translate-y-0" : "-translate-y-full",
         )}
       >
-        <MobileSidebarContent pathname={pathname} onNavigate={onNavigate} />
+        <div className="flex items-center gap-3 px-5 py-4">
+          <LogoMark />
+          <div>
+            <p className="text-sm font-semibold tracking-tight text-white">Room Intelligence</p>
+            <p className="text-[11px] font-medium text-white/40">Control surface</p>
+          </div>
+        </div>
+        <nav className="flex flex-col gap-1 px-3 pb-4">
+          {links.map((link) => {
+            const active = linkIsActive(pathname, link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={onNavigate}
+                className={cn(
+                  "relative rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                  active ? "text-white" : "text-white/45 hover:bg-white/5 hover:text-white/80",
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="nav-pill-mobile"
+                    className="absolute inset-0 rounded-xl border border-white/8 bg-white/6"
+                    transition={{ type: "spring", stiffness: 400, damping: 34 }}
+                  />
+                )}
+                <span className="relative z-10">{link.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
       </aside>
 
-      {/* Desktop: floating pill centered vertically */}
-      <div className="pointer-events-none fixed left-4 top-0 z-50 hidden h-full items-center lg:flex">
-        <nav className="pointer-events-auto flex flex-col gap-1 rounded-2xl border border-white/[0.08] bg-[rgba(8,10,14,0.75)] p-2 shadow-2xl shadow-black/40 backdrop-blur-2xl">
+      {/* Desktop: floating top bar, centered horizontally */}
+      <div className="pointer-events-none fixed left-0 right-0 top-5 z-50 hidden justify-center lg:flex">
+        <nav className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-white/8 bg-[rgba(8,10,14,0.75)] px-2 py-1.5 shadow-2xl shadow-black/40 backdrop-blur-2xl">
           {/* Logo */}
-          <div className="flex items-center justify-center px-1 pb-2 pt-1">
-            <LogoMark className="h-7 w-7" />
+          <div className="flex items-center gap-2 px-2 pr-3">
+            <LogoMark className="h-6 w-6" />
+            <span className="text-[13px] font-semibold tracking-tight text-white/70">RI</span>
           </div>
 
-          <div className="mx-auto h-px w-6 bg-white/[0.08]" />
+          <div className="h-5 w-px bg-white/8" />
 
           {/* Nav links */}
           {links.map((link) => {
@@ -69,16 +101,16 @@ export function Sidebar({
                 href={link.href}
                 onClick={onNavigate}
                 className={cn(
-                  "relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium transition-colors whitespace-nowrap",
+                  "relative rounded-xl px-3.5 py-1.5 text-[13px] font-medium transition-colors whitespace-nowrap",
                   active
                     ? "text-white"
-                    : "text-white/40 hover:bg-white/[0.05] hover:text-white/70",
+                    : "text-white/40 hover:bg-white/5 hover:text-white/70",
                 )}
               >
                 {active && (
                   <motion.span
                     layoutId="nav-pill"
-                    className="absolute inset-0 rounded-xl border border-white/[0.1] bg-white/[0.07]"
+                    className="absolute inset-0 rounded-xl border border-white/10 bg-white/7"
                     transition={{ type: "spring", stiffness: 400, damping: 34 }}
                   />
                 )}
@@ -88,51 +120,6 @@ export function Sidebar({
           })}
         </nav>
       </div>
-    </>
-  );
-}
-
-function MobileSidebarContent({
-  pathname,
-  onNavigate,
-}: {
-  pathname: string;
-  onNavigate?: () => void;
-}) {
-  return (
-    <>
-      <div className="flex items-center gap-3 px-5 py-5">
-        <LogoMark />
-        <div>
-          <p className="text-sm font-semibold tracking-tight text-white">Room Intelligence</p>
-          <p className="text-[11px] font-medium text-white/40">Control surface</p>
-        </div>
-      </div>
-      <nav className="flex flex-1 flex-col gap-1 px-3 pb-6">
-        {links.map((link) => {
-          const active = linkIsActive(pathname, link.href);
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={onNavigate}
-              className={cn(
-                "relative rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                active ? "text-white" : "text-white/45 hover:bg-white/[0.05] hover:text-white/80",
-              )}
-            >
-              {active && (
-                <motion.span
-                  layoutId="nav-pill-mobile"
-                  className="absolute inset-0 rounded-xl border border-white/[0.08] bg-white/[0.06]"
-                  transition={{ type: "spring", stiffness: 400, damping: 34 }}
-                />
-              )}
-              <span className="relative z-10">{link.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
     </>
   );
 }
