@@ -9,21 +9,27 @@
  * Step 4: Save — the backend stores the homography points.
  * Open an existing row with **Edit** to change corners; use **Clear camera/floor corners** then click again.
  *
- * After calibration, the analyze endpoint will use HOG person detection +
- * homography to project detections accurately onto the floor plan corridor.
+ * After calibration, the analyze endpoint uses YOLO foot positions +
+ * homography to project detections onto the floor plan corridor.
  */
 
 import { GlassPanel } from "@/components/ui/glass-panel";
 import { SectionHeader } from "@/components/panels/section-header";
+import { JohnAbbottLibraryFloorThree } from "@/components/spatial-map/john-abbott-library-floor-three";
 import { useCamsAllFeeds } from "@/hooks/use-cams-all-feeds";
 import type { CamsLatestObject } from "@/lib/supabase/cams-bucket";
 import { saveCalibration, listCalibrations, deleteCalibration } from "@/lib/api/calibration";
 import type { CorridorCalibration } from "@/lib/api/calibration";
+import {
+  clientPointToIntrinsicPercent,
+  containedRect,
+  intrinsicPercentToDisplayPercent,
+} from "@/lib/spatial/contained-media-pointer";
+import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-const FLOOR_PLAN_SRC = "/floorplans/floorplan_transparent.png";
 const FLOOR_W = 1536;
 const FLOOR_H = 1024;
 
@@ -58,84 +64,285 @@ function ClickablePanel({
   src,
   isVideo,
   videoRef,
+  intrinsicW,
+  intrinsicH,
   points,
   onClickPt,
   label,
   hint,
+  showPlayToggle,
 }: {
   src: string;
   isVideo: boolean;
   videoRef?: React.RefObject<HTMLVideoElement | null>;
+  /** Native pixel size of the frame (video) or logical floor image size used by the backend */
+  intrinsicW: number;
+  intrinsicH: number;
   points: XY[];
   onClickPt: (pt: XY) => void;
   label: string;
   hint: string;
+  /** Camera panel: show play/pause while placing points */
+  showPlayToggle?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ cw: 0, ch: 0 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      setBox({ cw: r.width, ch: r.height });
+    });
+    ro.observe(el);
+    const r = el.getBoundingClientRect();
+    setBox({ cw: r.width, ch: r.height });
+    return () => ro.disconnect();
+  }, []);
+
+  const ready =
+    intrinsicW > 0 &&
+    intrinsicH > 0 &&
+    box.cw > 0 &&
+    box.ch > 0;
+
+  const displayPoints = useMemo(() => {
+    if (!ready) return [] as XY[];
+    return points.map(([ix, iy]) =>
+      intrinsicPercentToDisplayPercent(ix, iy, box.cw, box.ch, intrinsicW, intrinsicH),
+    );
+  }, [points, ready, box.cw, box.ch, intrinsicW, intrinsicH]);
+
+  const frameOutline = useMemo(() => {
+    if (!ready) return null;
+    const { offsetX, offsetY, drawW, drawH } = containedRect(box.cw, box.ch, intrinsicW, intrinsicH);
+    return {
+      left: (offsetX / box.cw) * 100,
+      top: (offsetY / box.ch) * 100,
+      width: (drawW / box.cw) * 100,
+      height: (drawH / box.ch) * 100,
+    };
+  }, [ready, box.cw, box.ch, intrinsicW, intrinsicH]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (points.length >= 4) return;
       const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      onClickPt([Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
+      if (!rect || !ready) return;
+      const pct = clientPointToIntrinsicPercent(
+        e.clientX,
+        e.clientY,
+        rect,
+        intrinsicW,
+        intrinsicH,
+      );
+      if (!pct) return;
+      onClickPt([pct[0], pct[1]]);
     },
-    [points.length, onClickPt],
+    [points.length, onClickPt, ready, intrinsicW, intrinsicH],
+  );
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef?.current;
+    if (!v) return;
+    if (v.paused) void v.play();
+    else v.pause();
+  }, [videoRef]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</p>
+        {showPlayToggle && videoRef ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePlay();
+            }}
+            className="rounded-md border border-white/15 bg-black/50 px-2 py-1 text-[10px] font-medium text-white/70 backdrop-blur-sm hover:bg-white/10"
+          >
+            Preview play/pause
+          </button>
+        ) : null}
+      </div>
+      <div
+        ref={containerRef}
+        onClick={handleClick}
+        className={`relative aspect-video w-full overflow-hidden rounded-xl border border-white/[0.1] bg-black ${
+          points.length < 4 && ready ? "cursor-crosshair" : "cursor-default"
+        }`}
+      >
+        {!ready ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+            <p className="text-xs text-white/45">
+              {isVideo ? "Loading video dimensions…" : "Loading…"}
+            </p>
+          </div>
+        ) : null}
+
+        {isVideo ? (
+          <video
+            ref={videoRef as React.RefObject<HTMLVideoElement>}
+            src={src}
+            className="h-full w-full object-contain"
+            muted
+            playsInline
+            loop
+            preload="metadata"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="Floor plan" className="h-full w-full object-contain" />
+        )}
+
+        {ready && frameOutline ? (
+          <div
+            className="pointer-events-none absolute box-border rounded-md border border-emerald-400/35 shadow-[inset_0_0_0_1px_rgba(52,211,153,0.12)]"
+            style={{
+              left: `${frameOutline.left}%`,
+              top: `${frameOutline.top}%`,
+              width: `${frameOutline.width}%`,
+              height: `${frameOutline.height}%`,
+            }}
+            aria-hidden
+          />
+        ) : null}
+
+        {displayPoints.map((pt, i) => (
+          <PointMarker key={i} idx={i} x={pt[0]} y={pt[1]} />
+        ))}
+
+        {displayPoints.length >= 2 && (
+          <svg className="pointer-events-none absolute inset-0 h-full w-full">
+            <polyline
+              points={[...displayPoints, displayPoints[0]]
+                .slice(0, displayPoints.length + (displayPoints.length === 4 ? 1 : 0))
+                .map((p) => `${p[0]}%,${p[1]}%`)
+                .join(" ")}
+              fill={displayPoints.length === 4 ? "rgba(255,255,255,0.07)" : "none"}
+              stroke="rgba(255,255,255,0.4)"
+              strokeWidth="0.8"
+              strokeDasharray={displayPoints.length < 4 ? "4 3" : "none"}
+            />
+          </svg>
+        )}
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
+          <p className="text-[10px] text-white/60">{hint}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Right-hand floor panel that shows the 3D library view.
+ * An absolute overlay captures clicks (in place-mode) and maps them to
+ * `FLOOR_W × FLOOR_H` intrinsic percentage coordinates — the same coordinate
+ * space the backend homography uses.  Since the 3D canvas is `aspect-[3/2]`
+ * and the floor PNG is 1536×1024 (3:2), there is never any letterboxing.
+ */
+function FloorThreeClickPanel({
+  points,
+  onClickPt,
+  label,
+  hint,
+}: {
+  points: XY[];
+  onClickPt: (pt: XY) => void;
+  label: string;
+  hint: string;
+}) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      setContainerSize({ w: r.width, h: r.height });
+    });
+    ro.observe(el);
+    const r = el.getBoundingClientRect();
+    setContainerSize({ w: r.width, h: r.height });
+    return () => ro.disconnect();
+  }, []);
+
+  const ready = containerSize.w > 0 && containerSize.h > 0;
+  const placing = points.length < 4;
+
+  const displayPoints = useMemo(() => {
+    if (!ready) return [] as XY[];
+    return points.map(([ix, iy]) =>
+      intrinsicPercentToDisplayPercent(ix, iy, containerSize.w, containerSize.h, FLOOR_W, FLOOR_H),
+    );
+  }, [points, ready, containerSize.w, containerSize.h]);
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!placing) return;
+      const rect = overlayRef.current?.getBoundingClientRect();
+      if (!rect || !ready) return;
+      const pct = clientPointToIntrinsicPercent(e.clientX, e.clientY, rect, FLOOR_W, FLOOR_H);
+      if (!pct) return;
+      onClickPt([pct[0], pct[1]]);
+    },
+    [placing, onClickPt, ready],
+  );
+
+  const canvasOverlay = (
+    <div
+      ref={overlayRef}
+      className={cn(
+        "absolute inset-0 z-30",
+        placing ? "cursor-crosshair pointer-events-auto" : "pointer-events-none",
+      )}
+      onClick={handleClick}
+    >
+      {/* Mode badge */}
+      {placing && (
+        <div className="pointer-events-none absolute left-2 top-2 rounded-full border border-sky-400/30 bg-sky-400/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-sky-200/90">
+          Place mode · orbit paused
+        </div>
+      )}
+
+      {/* Point markers */}
+      {displayPoints.map((pt, i) => (
+        <PointMarker key={i} idx={i} x={pt[0]} y={pt[1]} />
+      ))}
+
+      {/* Connecting polyline */}
+      {displayPoints.length >= 2 && (
+        <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+          <polyline
+            points={[
+              ...displayPoints,
+              ...(displayPoints.length === 4 ? [displayPoints[0]] : []),
+            ]
+              .map((p) => `${p[0]}%,${p[1]}%`)
+              .join(" ")}
+            fill={displayPoints.length === 4 ? "rgba(255,255,255,0.07)" : "none"}
+            stroke="rgba(255,255,255,0.4)"
+            strokeWidth="0.8"
+            strokeDasharray={displayPoints.length < 4 ? "4 3" : "none"}
+          />
+        </svg>
+      )}
+
+      {/* Hint gradient bar at bottom */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
+        <p className="text-[10px] text-white/60">{hint}</p>
+      </div>
+    </div>
   );
 
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</p>
-      <div
-        ref={containerRef}
-        onClick={handleClick}
-        className={`relative aspect-video w-full overflow-hidden rounded-xl border border-white/[0.1] bg-black ${
-          points.length < 4 ? "cursor-crosshair" : "cursor-default"
-        }`}
-      >
-        {isVideo ? (
-          <video
-            ref={videoRef as React.RefObject<HTMLVideoElement>}
-            src={src}
-            className="h-full w-full object-cover"
-            autoPlay
-            muted
-            playsInline
-            loop
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="Floor plan" className="h-full w-full object-cover" />
-        )}
-
-        {/* Point markers */}
-        {points.map((pt, i) => (
-          <PointMarker key={i} idx={i} x={pt[0]} y={pt[1]} />
-        ))}
-
-        {/* Polygon line connecting points */}
-        {points.length >= 2 && (
-          <svg className="pointer-events-none absolute inset-0 h-full w-full">
-            <polyline
-              points={[...points, points[0]]
-                .slice(0, points.length + (points.length === 4 ? 1 : 0))
-                .map((p) => `${p[0]}%,${p[1]}%`)
-                .join(" ")}
-              fill={points.length === 4 ? "rgba(255,255,255,0.07)" : "none"}
-              stroke="rgba(255,255,255,0.4)"
-              strokeWidth="0.8"
-              strokeDasharray={points.length < 4 ? "4 3" : "none"}
-            />
-          </svg>
-        )}
-
-        {/* Overlay hint */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
-          <p className="text-[10px] text-white/60">{hint}</p>
-        </div>
-      </div>
+      <JohnAbbottLibraryFloorThree canvasChildren={canvasOverlay} />
     </div>
   );
 }
@@ -158,6 +365,7 @@ function CalibrationModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [cameraIntrinsic, setCameraIntrinsic] = useState<{ w: number; h: number } | null>(null);
   const hydratedEditKey = useRef<string | null>(null);
 
   const videoObjects = objects.filter((o) => o.kind === "video");
@@ -174,6 +382,41 @@ function CalibrationModal({
       document.body.style.overflow = "";
     };
   }, [onClose]);
+
+  useEffect(() => {
+    setCameraIntrinsic(null);
+  }, [selectedCam?.url]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !selectedCam || selectedCam.kind !== "video") return;
+    const sync = () => {
+      if (v.videoWidth > 0 && v.videoHeight > 0) {
+        setCameraIntrinsic({ w: v.videoWidth, h: v.videoHeight });
+      }
+    };
+    v.addEventListener("loadedmetadata", sync);
+    v.addEventListener("loadeddata", sync);
+    sync();
+    return () => {
+      v.removeEventListener("loadedmetadata", sync);
+      v.removeEventListener("loadeddata", sync);
+    };
+  }, [selectedCam?.url, selectedCam?.kind]);
+
+  /** Pause and reset scrub while placing camera corners (clearer, matches saved frame coords). */
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !selectedCam || selectedCam.kind !== "video") return;
+    if (cameraPts.length < 4) {
+      v.pause();
+      try {
+        v.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [cameraPts.length, selectedCam?.url, selectedCam?.kind]);
 
   /** Edit mode: load saved points once per calibration; keep matching clip in sync when bucket loads. */
   useEffect(() => {
@@ -192,9 +435,6 @@ function CalibrationModal({
     }
     setSelectedCam(findVideoForCameraId(objects, initialCalibration.camera_id));
   }, [initialCalibration, objects]);
-
-  const step =
-    !selectedCam ? 0 : cameraPts.length < 4 ? 1 : floorPts.length < 4 ? 2 : 3;
 
   const cameraId = selectedCam
     ? (
@@ -265,10 +505,15 @@ function CalibrationModal({
               {isEditMode ? "Edit corridor calibration" : "Corridor calibration"}
             </h2>
             <p className="mt-0.5 text-xs text-white/45">
-              Mark 4 matching corners in the camera view and on the floor plan to compute the homography.
-              {isEditMode
-                ? " Use Clear to re-place corners, then click again in order A→D."
-                : null}
+              Maps a camera clip to the{" "}
+              <strong className="text-white/70">3D floor plan</strong> for homography (analysis
+              overlay). Mark 4 matching corners on the{" "}
+              <strong className="text-white/70">full camera frame</strong> (left), then click the
+              same spots on the{" "}
+              <strong className="text-white/70">3D floor view</strong> (right — orbit is paused
+              while placing). The backend uses{" "}
+              <strong className="text-white/70">{FLOOR_W}×{FLOOR_H}</strong> intrinsic coordinates.
+              {isEditMode ? " Use Clear to re-place corners, then click again in order A→D." : null}
             </p>
           </div>
           <button
@@ -364,32 +609,35 @@ function CalibrationModal({
                     src={selectedCam.url}
                     isVideo={selectedCam.kind === "video"}
                     videoRef={videoRef}
+                    intrinsicW={cameraIntrinsic?.w ?? 0}
+                    intrinsicH={cameraIntrinsic?.h ?? 0}
                     points={cameraPts}
                     onClickPt={(pt) => {
                       if (cameraPts.length < 4) setCameraPts((p) => [...p, pt]);
                     }}
                     label="Camera view — click the 4 floor-corners of the corridor"
                     hint={
-                      cameraPts.length < 4
-                        ? `Click corner ${POINT_LABELS[cameraPts.length]} (${4 - cameraPts.length} remaining)`
-                        : "✓ 4 points set"
+                      !cameraIntrinsic
+                        ? "Wait for video dimensions…"
+                        : cameraPts.length < 4
+                          ? `Click corner ${POINT_LABELS[cameraPts.length]} (${4 - cameraPts.length} remaining) · video paused for accuracy`
+                          : "✓ 4 points set"
                     }
+                    showPlayToggle
                   />
-                  <ClickablePanel
-                    src={FLOOR_PLAN_SRC}
-                    isVideo={false}
+                  <FloorThreeClickPanel
                     points={floorPts}
                     onClickPt={(pt) => {
                       if (cameraPts.length === 4 && floorPts.length < 4)
                         setFloorPts((p) => [...p, pt]);
                     }}
-                    label="Floor plan — click the same 4 corners in matching order"
+                    label="3D floor plan — click the same 4 corners in matching order"
                     hint={
                       cameraPts.length < 4
                         ? "Finish camera points first"
                         : floorPts.length < 4
-                          ? `Click corner ${POINT_LABELS[floorPts.length]} (${4 - floorPts.length} remaining)`
-                          : "✓ 4 points set"
+                          ? `Click corner ${POINT_LABELS[floorPts.length]} (${4 - floorPts.length} remaining) · scroll or +/- to zoom · orbit paused while placing`
+                          : "✓ 4 points set — orbit controls restored"
                     }
                   />
                 </div>
@@ -436,29 +684,62 @@ function CalibrationModal({
                   {error}
                 </p>
               )}
-
-              {/* Progress indicator */}
-              <div className="mt-4 flex gap-2">
-                {(["Camera selected", "Camera points (4)", "Floor points (4)", "Ready to save"] as const).map(
-                  (s, i) => (
-                    <div
-                      key={s}
-                      className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium ${
-                        i <= step
-                          ? "bg-sky-400/15 text-sky-200/90"
-                          : "bg-white/[0.04] text-white/30"
-                      }`}
-                    >
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${i <= step ? "bg-sky-400" : "bg-white/20"}`}
-                      />
-                      {s}
-                    </div>
-                  ),
-                )}
-              </div>
             </>
           )}
+
+          {/* Progress from real counts; old `i <= step` lit “4/4” while still placing video corners. */}
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-white/[0.06] pt-4">
+            {(
+              [
+                {
+                  key: "cam",
+                  label: "1 · Camera",
+                  done: Boolean(selectedCam),
+                  current: !selectedCam,
+                },
+                {
+                  key: "vid",
+                  label: `2 · Video corners ${selectedCam ? `${cameraPts.length}/4` : "—"}`,
+                  done: cameraPts.length >= 4,
+                  current: Boolean(selectedCam) && cameraPts.length < 4,
+                },
+                {
+                  key: "fl",
+                  label: `3 · Floor corners ${selectedCam ? `${floorPts.length}/4` : "—"}`,
+                  done: floorPts.length >= 4,
+                  current:
+                    Boolean(selectedCam) && cameraPts.length >= 4 && floorPts.length < 4,
+                },
+                {
+                  key: "save",
+                  label: "4 · Save",
+                  done: cameraPts.length >= 4 && floorPts.length >= 4,
+                  current:
+                    Boolean(selectedCam) && cameraPts.length >= 4 && floorPts.length >= 4,
+                },
+              ] as const
+            ).map((row) => {
+              const tone = row.done
+                ? "bg-emerald-400/12 text-emerald-100/90 ring-1 ring-emerald-400/25"
+                : row.current
+                  ? "bg-sky-400/15 text-sky-100/90 ring-1 ring-sky-400/35"
+                  : "bg-white/[0.04] text-white/30";
+              const dot = row.done
+                ? "bg-emerald-400"
+                : row.current
+                  ? "bg-sky-400"
+                  : "bg-white/20";
+              return (
+                <div
+                  key={row.key}
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium ${tone}`}
+                >
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+                  {row.label}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </motion.div>
     </motion.div>,
@@ -511,7 +792,7 @@ export function CorridorCalibrationPanel() {
     <GlassPanel className="p-5">
       <SectionHeader
         title="Camera ↔ corridor calibration"
-        subtitle="Map camera view to floor plan corridor for accurate person heatmaps"
+        subtitle="Homography uses full frame pixels — calibration clicks are mapped through letterboxed video / floor image"
         action={
           <button
             type="button"
