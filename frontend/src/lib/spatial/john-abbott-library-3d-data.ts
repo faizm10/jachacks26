@@ -112,3 +112,6 @@ export const JOHN_ABBOTT_3D_MATS_DARK = {
 >;
 
 export const JOHN_ABBOTT_LIBRARY_SUBTITLE = "John Abbott College Library · Sainte-Anne-de-Bellevue";
+
+/** Official college site — used in map legend / attribution. */
+export const JOHN_ABBOTT_COLLEGE_URL = "https://johnabbott.qc.ca/";

@@ -3,17 +3,137 @@
 import {
   JOHN_ABBOTT_3D_FLOORS,
   JOHN_ABBOTT_3D_MATS_DARK,
+  JOHN_ABBOTT_COLLEGE_URL,
   JOHN_ABBOTT_LIBRARY_SUBTITLE,
   type LibraryFloorKey,
+  type LibraryRoom3D,
   type LibraryRoomType,
 } from "@/lib/spatial/john-abbott-library-3d-data";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 const SCALE = 0.9;
 const HOVER_EMISSIVE = 0x4c6fa8;
+
+/** Lift label anchor slightly above room roof (world Y). */
+const LABEL_Y_LIFT = 10;
+
+const _proj = new THREE.Vector3();
+const _camPos = new THREE.Vector3();
+const _toPoint = new THREE.Vector3();
+const _camDir = new THREE.Vector3();
+
+function roomAnchorWorld(
+  r: { x: number; z: number; w: number; d: number; h: number },
+  yBoost: number,
+): THREE.Vector3 {
+  return new THREE.Vector3(
+    r.x * SCALE + (r.w * SCALE) / 2,
+    r.h * 5 + yBoost + LABEL_Y_LIFT,
+    r.z * SCALE + (r.d * SCALE) / 2,
+  );
+}
+
+/** Main zones for stacked embed — anchors follow orbit each frame (screen projection). */
+function getStackedAreaMarkers(stackGap: number) {
+  const f1 = JOHN_ABBOTT_3D_FLOORS.f1.rooms;
+  const bs = JOHN_ABBOTT_3D_FLOORS.bs.rooms;
+  const pick = (rooms: readonly LibraryRoom3D[], id: string) => {
+    const r = rooms.find((x) => x.id === id);
+    if (!r) throw new Error(`Missing room label anchor: ${id}`);
+    return r;
+  };
+
+  return [
+    {
+      id: "f1-reading",
+      floor: "1st floor",
+      title: "Main reading hall",
+      accent: "#7dd3fc",
+      world: roomAnchorWorld(pick(f1, "101B"), stackGap),
+    },
+    {
+      id: "f1-east",
+      floor: "1st floor",
+      title: "East commons",
+      accent: "#a5b4fc",
+      world: roomAnchorWorld(pick(f1, "119"), stackGap),
+    },
+    {
+      id: "f1-desk",
+      floor: "1st floor",
+      title: "Help & service",
+      accent: "#fcd34d",
+      world: roomAnchorWorld(pick(f1, "104"), stackGap),
+    },
+    {
+      id: "bs-foyer",
+      floor: "Basement",
+      title: "Foyer · You are here",
+      accent: "#86efac",
+      world: roomAnchorWorld(pick(bs, "004"), 0),
+    },
+    {
+      id: "bs-open",
+      floor: "Basement",
+      title: "Open study core",
+      accent: "#67e8f9",
+      world: roomAnchorWorld(pick(bs, "001"), 0),
+    },
+    {
+      id: "bs-east",
+      floor: "Basement",
+      title: "East wing · lab & study",
+      accent: "#93c5fd",
+      world: roomAnchorWorld(pick(bs, "024"), 0),
+    },
+  ] as const;
+}
+
+type StackedScreenLabel = { el: HTMLDivElement; world: THREE.Vector3 };
+
+/** Project world anchors to CSS pixels over the canvas (call after camera is current). */
+function updateStackedScreenLabels(
+  camera: THREE.PerspectiveCamera,
+  canvas: HTMLCanvasElement,
+  entries: StackedScreenLabel[],
+) {
+  if (!entries.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1, rect.width);
+  const h = Math.max(1, rect.height);
+  camera.updateMatrixWorld(true);
+  camera.getWorldPosition(_camPos);
+  camera.getWorldDirection(_camDir);
+  for (const { el, world } of entries) {
+    _toPoint.copy(world).sub(_camPos).normalize();
+    const faceDot = _toPoint.dot(_camDir);
+    const facing = faceDot > 0.06;
+    _proj.copy(world).project(camera);
+    const m = 0.08;
+    const inFrustum =
+      _proj.z > -1 &&
+      _proj.z < 1 &&
+      _proj.x > -1 + m &&
+      _proj.x < 1 - m &&
+      _proj.y > -1 + m &&
+      _proj.y < 1 - m;
+    if (!facing || !inFrustum) {
+      el.style.opacity = "0";
+      el.style.visibility = "hidden";
+      continue;
+    }
+    el.style.visibility = "visible";
+    const face01 = Math.min(1, Math.max(0, (faceDot - 0.06) / 0.5));
+    const scale = 0.9 + 0.1 * face01;
+    el.style.opacity = String(0.5 + 0.48 * face01);
+    const px = (_proj.x * 0.5 + 0.5) * w;
+    const py = (-_proj.y * 0.5 + 0.5) * h;
+    el.style.transform = `translate3d(${px}px, ${py}px, 0) translate(-50%, -118%) scale(${scale.toFixed(4)})`;
+  }
+}
 
 /** Vertical world-units between basement ceiling (~28u) and 1st-floor base in stacked view. */
 const STACK_GAP = 174;
@@ -263,6 +383,16 @@ export function JohnAbbottLibraryFloorThree({
   const [selected, setSelected] = useState<{ id: string; note: string } | null>(null);
   const effectiveViewMode: ViewMode = stackedEmbed ? "stacked" : viewMode;
 
+  const stackedLegendZones = useMemo(() => {
+    if (!stackedEmbed) return [];
+    return getStackedAreaMarkers(STACK_GAP).map(({ id, floor, title, accent }) => ({
+      id,
+      floor,
+      title,
+      accent,
+    }));
+  }, [stackedEmbed]);
+
   const setSize = useCallback((ctx: ThreeCtx, w: number, h: number) => {
     const H = Math.max(120, h);
     const W = Math.max(160, w);
@@ -347,6 +477,38 @@ export function JohnAbbottLibraryFloorThree({
 
     syncIdleAnchors(ctx);
 
+    const screenLabelEntries: StackedScreenLabel[] = [];
+    let screenLabelLayer: HTMLDivElement | null = null;
+    if (stackedEmbed) {
+      screenLabelLayer = document.createElement("div");
+      screenLabelLayer.className =
+        "pointer-events-none absolute inset-0 z-[28] overflow-visible";
+      const markers = getStackedAreaMarkers(STACK_GAP);
+      for (const m of markers) {
+        const el = document.createElement("div");
+        el.dataset.areaLabel = m.id;
+        el.className =
+          "absolute left-0 top-0 flex min-w-0 max-w-[10rem] flex-col gap-0.5 rounded-lg border border-white/[0.14] bg-black/50 px-2.5 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-md";
+        el.style.borderLeftStyle = "solid";
+        el.style.borderLeftWidth = "3px";
+        el.style.borderLeftColor = m.accent;
+        el.style.willChange = "transform, opacity";
+        const floorEl = document.createElement("span");
+        floorEl.className =
+          "text-[9px] font-semibold uppercase tracking-[0.16em] text-white/45";
+        floorEl.textContent = m.floor;
+        const titleEl = document.createElement("span");
+        titleEl.className =
+          "text-[11px] font-semibold leading-snug tracking-tight text-white";
+        titleEl.textContent = m.title;
+        el.appendChild(floorEl);
+        el.appendChild(titleEl);
+        screenLabelLayer.appendChild(el);
+        screenLabelEntries.push({ el, world: m.world });
+      }
+      host.appendChild(screenLabelLayer);
+    }
+
     ctx.resizeObserver.observe(host);
 
     const enableIdleMotion = stackedEmbed;
@@ -365,6 +527,9 @@ export function JohnAbbottLibraryFloorThree({
         updateCamera(ctx);
       }
       renderer.render(scene, camera);
+      if (screenLabelEntries.length) {
+        updateStackedScreenLabels(camera, canvas, screenLabelEntries);
+      }
     };
     loop();
 
@@ -447,6 +612,7 @@ export function JohnAbbottLibraryFloorThree({
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointerleave", onPointerUp);
       host.removeEventListener("wheel", onWheel);
+      screenLabelLayer?.remove();
       disposeHeatOverlay(ctx);
       clearRooms(ctx);
       scene.remove(amb);
@@ -613,6 +779,45 @@ export function JohnAbbottLibraryFloorThree({
             stackedEmbed && "bg-transparent",
           )}
         />
+        {stackedEmbed ? (
+          <div className="pointer-events-none absolute bottom-0 left-0 z-[32] max-w-[min(100%,20rem)] p-3">
+            <div className="pointer-events-auto rounded-2xl border border-white/[0.1] bg-gradient-to-br from-black/80 via-black/55 to-black/35 p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">Campus model</p>
+              <p className="mt-1 text-sm font-semibold tracking-tight text-white/95">John Abbott College</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-white/50">Herzberg Library · stacked 3D floors</p>
+              <a
+                href={JOHN_ABBOTT_COLLEGE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-sky-300/95 underline decoration-sky-400/40 underline-offset-2 transition-colors hover:text-sky-200 hover:decoration-sky-200/60"
+              >
+                johnabbott.qc.ca
+                <span className="text-white/35" aria-hidden>
+                  ↗
+                </span>
+              </a>
+              <div className="mt-3 border-t border-white/[0.08] pt-3">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35">Zone tags</p>
+                <ul className="mt-2 grid gap-1.5">
+                  {stackedLegendZones.map((z) => (
+                    <li key={z.id} className="flex items-start gap-2 text-[11px] leading-snug text-white/70">
+                      <span
+                        className="mt-0.5 h-2 w-2 shrink-0 rounded-full ring-1 ring-white/20"
+                        style={{ backgroundColor: z.accent }}
+                        aria-hidden
+                      />
+                      <span>
+                        <span className="text-white/40">{z.floor}</span>
+                        <span className="mx-1 text-white/25">·</span>
+                        {z.title}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {canvasChildren}
       </div>
 
