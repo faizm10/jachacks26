@@ -94,6 +94,71 @@ export const CAMERA_REGIONS: Record<string, CameraRegion> = {
   },
 };
 
+/**
+ * Maps each camera to the floor and room IDs it covers in the 3D model.
+ * Used by the camera detail page to zoom into the correct part of the building.
+ */
+export interface CameraRoomMapping {
+  /** Which floor this camera is on */
+  floor: "f1" | "bs";
+  /** Room IDs from john-abbott-library-3d-data.ts that this camera covers */
+  roomIds: string[];
+  /** Human-readable zone label (matches the landing page area names) */
+  zone: string;
+}
+
+export const CAMERA_ROOM_MAPPINGS: Record<string, CameraRoomMapping> = {
+  "basement-hallway-1": {
+    floor: "bs",
+    roomIds: ["003", "001", "002"],
+    zone: "Open study core",
+  },
+  "basement-hallway-2": {
+    floor: "bs",
+    roomIds: ["003", "001", "002"],
+    zone: "Open study core",
+  },
+  "basement-hallway-3": {
+    floor: "bs",
+    roomIds: ["004", "010", "013"],
+    zone: "Foyer",
+  },
+  "first-floor-main-hall": {
+    floor: "f1",
+    roomIds: ["101", "101B", "101D"],
+    zone: "Main reading hall",
+  },
+  "hall-test": {
+    floor: "f1",
+    roomIds: ["101", "101B", "101D"],
+    zone: "Main reading hall",
+  },
+  "hall-test-2": {
+    floor: "f1",
+    roomIds: ["101", "101B", "101D"],
+    zone: "Main reading hall",
+  },
+  "first-floor-entrance": {
+    floor: "f1",
+    roomIds: ["101D", "104", "110"],
+    zone: "Help & service",
+  },
+  "first-floor-study-area": {
+    floor: "f1",
+    roomIds: ["119", "112", "114", "116", "118"],
+    zone: "East commons",
+  },
+};
+
+export function getCameraRoomMapping(cameraId: string): CameraRoomMapping | null {
+  const key = cameraId.toLowerCase().replace(/\.[^.]+$/, "").trim();
+  if (CAMERA_ROOM_MAPPINGS[key]) return CAMERA_ROOM_MAPPINGS[key];
+  for (const [k, v] of Object.entries(CAMERA_ROOM_MAPPINGS)) {
+    if (key.includes(k) || k.includes(key)) return v;
+  }
+  return null;
+}
+
 export function getCameraRegion(cameraId: string): CameraRegion | null {
   const key = cameraId
     .toLowerCase()

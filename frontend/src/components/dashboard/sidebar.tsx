@@ -14,6 +14,7 @@ const links = [
 
 function linkIsActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/" || pathname === "/dashboard";
+  if (href === "/#camera-feed") return pathname.startsWith("/camera/");
   if (href === "/spatial-map") return pathname === "/spatial-map";
   return false;
 }

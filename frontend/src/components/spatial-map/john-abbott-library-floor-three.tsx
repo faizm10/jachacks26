@@ -17,6 +17,7 @@ import {
   pulseHexColumns,
   updateCanvasWorldLabels,
   type CanvasWorldLabel,
+  type LivePersonBar,
 } from "@/lib/spatial/john-abbott-hex-heatmap";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -243,32 +244,34 @@ function setStackedOrbitTarget(ctx: ThreeCtx) {
   ctx.target.set((f1.target.x + bs.target.x) / 2, midY, (f1.target.z + bs.target.z) / 2);
 }
 
-function createHexColumns(ctx: ThreeCtx, bsYOffset: number, f1YOffset: number | null) {
-  createJohnAbbottActivityHexes(ctx.scene, ctx.hexColumns, bsYOffset, f1YOffset);
+function createHexColumns(ctx: ThreeCtx, bsYOffset: number, f1YOffset: number | null, livePersons?: LivePersonBar[]) {
+  createJohnAbbottActivityHexes(ctx.scene, ctx.hexColumns, bsYOffset, f1YOffset, livePersons);
 }
 
 // ---------------------------------------------------------------------------
 // Build scene
 // ---------------------------------------------------------------------------
 
-function buildScene(ctx: ThreeCtx, mode: ViewMode) {
+function buildScene(ctx: ThreeCtx, mode: ViewMode, hexColumns = true, livePersons?: LivePersonBar[]) {
   clearRooms(ctx);
   disposeHexColumns(ctx);
 
   if (mode === "stacked") {
     appendFloorRooms(ctx, "bs", 0, true);
     appendFloorRooms(ctx, "f1", STACK_GAP, true);
-    createHexColumns(ctx, 0, STACK_GAP);
+    if (hexColumns) createHexColumns(ctx, 0, STACK_GAP, livePersons);
     setStackedOrbitTarget(ctx);
   } else if (mode === "bs") {
     appendFloorRooms(ctx, mode, 0, false);
-    createHexColumns(ctx, 0, null);
+    if (hexColumns) createHexColumns(ctx, 0, null, livePersons);
     const floor = JOHN_ABBOTT_3D_FLOORS[mode];
     ctx.target.set(floor.target.x, floor.target.y, floor.target.z);
   } else {
     appendFloorRooms(ctx, mode, 0, false);
-    const f1Offset = mode === "f1" ? 0 : null;
-    createHexColumns(ctx, 0, f1Offset);
+    if (hexColumns) {
+      const f1Offset = mode === "f1" ? 0 : null;
+      createHexColumns(ctx, 0, f1Offset, livePersons);
+    }
     const floor = JOHN_ABBOTT_3D_FLOORS[mode];
     ctx.target.set(floor.target.x, floor.target.y, floor.target.z);
   }
@@ -331,6 +334,15 @@ function pickHover(ctx: ThreeCtx, clientX: number, clientY: number) {
 // Component
 // ---------------------------------------------------------------------------
 
+export interface FocusRegion {
+  /** Which floor: "f1" or "bs" */
+  floor: LibraryFloorKey;
+  /** Room IDs from the 3D data to highlight and zoom into */
+  roomIds: string[];
+  /** Human-readable zone name */
+  label: string;
+}
+
 export function JohnAbbottLibraryFloorThree({
   className,
   cornerActions,
@@ -339,6 +351,12 @@ export function JohnAbbottLibraryFloorThree({
   layoutVariant = "default",
   fillColumn = false,
   highlightRoomId,
+  showHexColumns = true,
+  focusRegion,
+  livePersons,
+  onRoomClick,
+  pulseRoomIds,
+  glowRoomIds,
 }: {
   className?: string;
   cornerActions?: ReactNode;
@@ -346,15 +364,37 @@ export function JohnAbbottLibraryFloorThree({
   motionHeatOverlayUrl?: string | null;
   layoutVariant?: "default" | "stackedEmbed";
   fillColumn?: boolean;
-  highlightRoomId?: string | null;
+  highlightRoomId?: string | string[] | null;
+  /** When false, skip the hex density columns (default true). */
+  showHexColumns?: boolean;
+  /** Zoom into and highlight a specific calibration region on the floor plan. */
+  focusRegion?: FocusRegion | null;
+  /** Data-driven bars from video analysis — placed at exact positions. */
+  livePersons?: LivePersonBar[];
+  /** Called when user clicks a room mesh. */
+  onRoomClick?: (roomId: string | null) => void;
+  /** Room IDs that should pulse yellow (e.g. during analysis). */
+  pulseRoomIds?: string[] | null;
+  /** Room IDs that should glow green (analysis complete). */
+  glowRoomIds?: string[] | null;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<ThreeCtx | null>(null);
+  const onRoomClickRef = useRef(onRoomClick);
+  onRoomClickRef.current = onRoomClick;
+  const pulseRoomIdsRef = useRef(pulseRoomIds);
+  pulseRoomIdsRef.current = pulseRoomIds;
+  const glowRoomIdsRef = useRef(glowRoomIds);
+  glowRoomIdsRef.current = glowRoomIds;
   const stackedEmbed = layoutVariant === "stackedEmbed";
   const [viewMode, setViewMode] = useState<ViewMode>("f1");
   const [selected, setSelected] = useState<{ id: string; note: string } | null>(null);
-  const effectiveViewMode: ViewMode = stackedEmbed ? "stacked" : viewMode;
+  const effectiveViewMode: ViewMode = focusRegion
+    ? focusRegion.floor
+    : stackedEmbed
+      ? "stacked"
+      : viewMode;
 
   const setSize = useCallback((ctx: ThreeCtx, w: number, h: number) => {
     const H = Math.max(120, h);
@@ -526,6 +566,34 @@ export function JohnAbbottLibraryFloorThree({
       if (ctx.hexColumns.length > 0) {
         pulseHexColumns(ctx.hexColumns, ctx.idleT);
       }
+      // Yellow pulse on rooms being analyzed
+      const pIds = pulseRoomIdsRef.current;
+      if (pIds && pIds.length > 0) {
+        const pSet = new Set(pIds);
+        const t = now * 0.003;
+        const intensity = 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(t));
+        for (const m of ctx.meshes) {
+          const ud = m.userData as { id: string; baseEmissive: number; baseEmissiveIntensity: number };
+          if (pSet.has(ud.id)) {
+            const mat = m.material as THREE.MeshStandardMaterial;
+            mat.emissive.setHex(0xfbbf24); // amber-400
+            mat.emissiveIntensity = intensity;
+          }
+        }
+      }
+      // Green glow on rooms where analysis is complete
+      const gIds = glowRoomIdsRef.current;
+      if (gIds && gIds.length > 0) {
+        const gSet = new Set(gIds);
+        for (const m of ctx.meshes) {
+          const ud = m.userData as { id: string; baseEmissive: number; baseEmissiveIntensity: number };
+          if (gSet.has(ud.id) && !(pIds && new Set(pIds).has(ud.id))) {
+            const mat = m.material as THREE.MeshStandardMaterial;
+            mat.emissive.setHex(0x34d399); // emerald-400
+            mat.emissiveIntensity = 0.7;
+          }
+        }
+      }
       renderer.render(scene, camera);
       if (screenLabelEntries.length) {
         updateCanvasWorldLabels(camera, canvas, screenLabelEntries);
@@ -572,8 +640,10 @@ export function JohnAbbottLibraryFloorThree({
           const mesh = hits[0].object as THREE.Mesh;
           const { id, note } = mesh.userData as { id: string; note: string };
           setSelected({ id, note });
+          onRoomClickRef.current?.(id);
         } else {
           setSelected(null);
+          onRoomClickRef.current?.(null);
         }
       }
       try {
@@ -630,23 +700,46 @@ export function JohnAbbottLibraryFloorThree({
     };
   }, [setSize, layoutVariant, fillColumn, stackedEmbed]);
 
+  const livePersonsRef = useRef(livePersons);
+  livePersonsRef.current = livePersons;
+
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       const ctx = ctxRef.current;
       if (!ctx) return;
-      buildScene(ctx, effectiveViewMode);
+      buildScene(ctx, effectiveViewMode, showHexColumns, livePersonsRef.current);
     });
     return () => cancelAnimationFrame(id);
-  }, [effectiveViewMode]);
+  }, [effectiveViewMode, showHexColumns]);
+
+  // Rebuild hex columns when live person data arrives
+  useEffect(() => {
+    if (!livePersons || livePersons.length === 0) return;
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    disposeHexColumns(ctx);
+    const isStacked = effectiveViewMode === "stacked";
+    createHexColumns(ctx, 0, isStacked ? STACK_GAP : (effectiveViewMode === "f1" ? 0 : null), livePersons);
+  }, [livePersons, effectiveViewMode]);
 
   // Highlight room driven by external carousel
   useEffect(() => {
     const ctx = ctxRef.current;
     if (!ctx) return;
+    const ids = !highlightRoomId
+      ? null
+      : Array.isArray(highlightRoomId)
+        ? new Set(highlightRoomId)
+        : new Set([highlightRoomId]);
+    const pulsing = pulseRoomIdsRef.current ? new Set(pulseRoomIdsRef.current) : null;
+    const glowing = glowRoomIdsRef.current ? new Set(glowRoomIdsRef.current) : null;
     for (const m of ctx.meshes) {
       const mat = m.material as THREE.MeshStandardMaterial;
       const ud = m.userData as { id: string; baseEmissive: number; baseEmissiveIntensity: number };
-      if (highlightRoomId && ud.id === highlightRoomId) {
+      // Skip rooms handled by the render loop (pulse / glow)
+      if (pulsing && pulsing.has(ud.id)) continue;
+      if (glowing && glowing.has(ud.id)) continue;
+      if (ids && ids.has(ud.id)) {
         mat.emissive.setHex(0xfde68a);
         mat.emissiveIntensity = 0.8;
       } else {
@@ -655,6 +748,120 @@ export function JohnAbbottLibraryFloorThree({
       }
     }
   }, [highlightRoomId]);
+
+  // Focus region — zoom camera to specific rooms + glow them with light
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    if (!ctx || !focusRegion) return;
+
+    // Wait one frame for buildScene to finish populating meshes
+    const raf = requestAnimationFrame(() => {
+      // Find the room IDs that match, computing a bounding box in scene-space
+      const roomIdSet = new Set(focusRegion.roomIds.map((id) => id.toLowerCase()));
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      const matched: THREE.Mesh[] = [];
+
+      for (const m of ctx.meshes) {
+        const ud = m.userData as { id: string };
+        // Room IDs might be prefixed with floor label in stacked mode (e.g. "Basement · 024")
+        const rawId = ud.id.includes("·") ? ud.id.split("·")[1].trim() : ud.id;
+        if (roomIdSet.has(rawId.toLowerCase())) {
+          matched.push(m);
+          const geo = m.geometry as THREE.BoxGeometry;
+          const params = geo.parameters;
+          const halfW = params.width / 2;
+          const halfD = params.depth / 2;
+          minX = Math.min(minX, m.position.x - halfW);
+          maxX = Math.max(maxX, m.position.x + halfW);
+          minZ = Math.min(minZ, m.position.z - halfD);
+          maxZ = Math.max(maxZ, m.position.z + halfD);
+        }
+      }
+
+      if (matched.length === 0) return;
+
+      const cx = (minX + maxX) / 2;
+      const cz = (minZ + maxZ) / 2;
+      const spanX = maxX - minX;
+      const spanZ = maxZ - minZ;
+      const maxSpan = Math.max(spanX, spanZ);
+
+      // Glow the matched rooms
+      for (const m of matched) {
+        const mat = m.material as THREE.MeshStandardMaterial;
+        mat.emissive.setHex(0xfb923c);
+        mat.emissiveIntensity = 0.65;
+      }
+
+      // Dim non-matched rooms to make the focus pop
+      for (const m of ctx.meshes) {
+        if (!matched.includes(m)) {
+          const mat = m.material as THREE.MeshStandardMaterial;
+          mat.opacity = Math.min(mat.opacity, 0.3);
+        }
+      }
+
+      // Glowing ground plane under the region
+      const padX = spanX * 0.08;
+      const padZ = spanZ * 0.08;
+      const planeGeo = new THREE.PlaneGeometry(spanX + padX * 2, spanZ + padZ * 2);
+      const planeMat = new THREE.MeshBasicMaterial({
+        color: 0xfb923c,
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const planeMesh = new THREE.Mesh(planeGeo, planeMat);
+      planeMesh.rotation.x = -Math.PI / 2;
+      planeMesh.position.set(cx, 0.1, cz);
+      planeMesh.renderOrder = 3;
+      planeMesh.name = "focusRegionGlow";
+      ctx.scene.add(planeMesh);
+
+      // Point light for the "brimming with light" effect
+      const focusLight = new THREE.PointLight(0xfb923c, 2.0, maxSpan * 3, 1.2);
+      focusLight.position.set(cx, 60, cz);
+      focusLight.name = "focusRegionLight";
+      ctx.scene.add(focusLight);
+
+      // Secondary fill light from below for warmth
+      const fillLight = new THREE.PointLight(0xfde68a, 0.8, maxSpan * 2, 1.5);
+      fillLight.position.set(cx, 5, cz);
+      fillLight.name = "focusRegionFill";
+      ctx.scene.add(fillLight);
+
+      // Zoom camera: radius proportional to region size, angled nicely
+      ctx.target.set(cx, 12, cz);
+      ctx.spherical.radius = Math.max(220, maxSpan * 1.6);
+      ctx.spherical.theta = 0.55;
+      ctx.spherical.phi = 0.9;
+      updateCamera(ctx);
+      syncIdleAnchors(ctx);
+    });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      // Clean up added objects
+      for (const name of ["focusRegionGlow", "focusRegionLight", "focusRegionFill"]) {
+        const obj = ctx.scene.getObjectByName(name);
+        if (obj) {
+          ctx.scene.remove(obj);
+          if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
+          if ((obj as THREE.Mesh).material) ((obj as THREE.Mesh).material as THREE.Material).dispose();
+        }
+      }
+      // Restore room opacities
+      for (const m of ctx.meshes) {
+        const mat = m.material as THREE.MeshStandardMaterial;
+        const ud = m.userData as { baseEmissive: number; baseEmissiveIntensity: number };
+        mat.emissive.setHex(ud.baseEmissive);
+        mat.emissiveIntensity = ud.baseEmissiveIntensity;
+        // Restore opacity from material type defaults
+        mat.opacity = mat.opacity < 0.5 ? 0.9 : mat.opacity;
+      }
+    };
+  }, [focusRegion]);
 
   useEffect(() => {
     if (!motionHeatOverlayUrl) {

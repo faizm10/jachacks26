@@ -6,6 +6,7 @@ import { CameraFeedPanel } from "@/components/panels/camera-feed-panel";
 import { FloorOverviewPanel } from "@/components/panels/floor-overview-panel";
 import { getCameraRegion } from "@/lib/camera-regions";
 import type { RoomSnapshot } from "@/lib/types/room";
+import { useLiveFloorBars } from "@/hooks/use-live-floor-bars";
 import { motion } from "framer-motion";
 import { useCallback, useMemo, useState } from "react";
 
@@ -22,6 +23,9 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [clickedRoomId, setClickedRoomId] = useState<string | null>(null);
+
+  const { bars: livePersons } = useLiveFloorBars();
 
   const handleSelect = useCallback(
     (obj: { url: string; path?: string }) => {
@@ -37,6 +41,10 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
     },
     [],
   );
+
+  const handleRoomClick = useCallback((roomId: string | null) => {
+    setClickedRoomId(roomId);
+  }, []);
 
   const cameraRegion = useMemo(
     () => (selectedCameraId ? getCameraRegion(selectedCameraId) : null),
@@ -56,10 +64,21 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
       {/* ═══ HERO: Floor map + Building vibe ═══ */}
       <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
         <motion.div variants={block} className="flex h-full min-h-0 flex-col lg:col-span-7">
-          <FloorOverviewPanel cameraRegion={cameraRegion} highlightRoomId={activeRoomId} />
+          <FloorOverviewPanel
+            cameraRegion={cameraRegion}
+            highlightRoomId={activeRoomId}
+            onRoomClick={handleRoomClick}
+            livePersons={livePersons}
+          />
         </motion.div>
         <motion.div variants={block} className="lg:col-span-5">
-          <BuildingVibePanel stats={snapshot.stats} insights={snapshot.insights} onActiveRoomChange={setActiveRoomId} />
+          <BuildingVibePanel
+            stats={snapshot.stats}
+            insights={snapshot.insights}
+            onActiveRoomChange={setActiveRoomId}
+            livePersons={livePersons}
+            clickedRoomId={clickedRoomId}
+          />
         </motion.div>
       </div>
 

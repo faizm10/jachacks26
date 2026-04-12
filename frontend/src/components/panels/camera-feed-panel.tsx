@@ -10,6 +10,7 @@ import { getCamsBucketName } from "@/lib/supabase/cams-bucket";
 import type { CamsLatestObject } from "@/lib/supabase/cams-bucket";
 import { motion } from "framer-motion";
 import { Clapperboard } from "lucide-react";
+import Link from "next/link";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -231,8 +232,17 @@ function VideoTile({
           ↗
         </button>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-3 py-3 sm:px-4 sm:py-3.5">
-          <p className="truncate text-xs font-medium text-white/80 sm:text-[13px]">{fileName}</p>
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-3 py-3 sm:px-4 sm:py-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="pointer-events-none truncate text-xs font-medium text-white/80 sm:text-[13px]">{fileName}</p>
+            <Link
+              href={`/camera/${encodeURIComponent(fileName.replace(/\.[^.]+$/, ""))}`}
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0 rounded-full border border-white/15 bg-black/50 px-2.5 py-1 text-[10px] font-semibold text-white/70 backdrop-blur-sm transition-colors hover:bg-white/15 hover:text-white"
+            >
+              Details &rarr;
+            </Link>
+          </div>
         </div>
       </div>
 

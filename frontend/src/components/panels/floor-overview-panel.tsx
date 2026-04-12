@@ -3,6 +3,7 @@
 import { JohnAbbottLibraryFloorThree } from "@/components/spatial-map/john-abbott-library-floor-three";
 import { PointCloudFloorPlan } from "@/components/spatial-map/point-cloud-floor-plan";
 import { JOHN_ABBOTT_COLLEGE_URL } from "@/lib/spatial/john-abbott-library-3d-data";
+import type { LivePersonBar } from "@/lib/spatial/john-abbott-hex-heatmap";
 import type { CameraRegion } from "@/lib/camera-regions";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -12,9 +13,13 @@ type FloorHeroVisual = "mesh" | "pointCloud";
 export function FloorOverviewPanel({
   cameraRegion: _cameraRegion,
   highlightRoomId,
+  onRoomClick,
+  livePersons,
 }: {
   cameraRegion: CameraRegion | null;
   highlightRoomId?: string | null;
+  onRoomClick?: (roomId: string | null) => void;
+  livePersons?: LivePersonBar[];
 }) {
   const [visual, setVisual] = useState<FloorHeroVisual>("mesh");
 
@@ -82,7 +87,7 @@ export function FloorOverviewPanel({
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         {visual === "mesh" ? (
-          <JohnAbbottLibraryFloorThree layoutVariant="stackedEmbed" fillColumn className="min-h-0 flex-1" highlightRoomId={highlightRoomId} />
+          <JohnAbbottLibraryFloorThree layoutVariant="stackedEmbed" fillColumn className="min-h-0 flex-1" highlightRoomId={highlightRoomId} livePersons={livePersons} onRoomClick={onRoomClick} />
         ) : (
           <PointCloudFloorPlan fillColumn className="min-h-0 flex-1" />
         )}

@@ -400,6 +400,8 @@ export interface ARLabelsOverlayProps {
   onVideoRef?: (ref: React.RefObject<HTMLVideoElement | null>) => void;
   /** Override displayed person count (e.g. from live analysis). */
   peopleCount?: number;
+  /** When true, re-run detection on every video loop instead of stopping after the first pass. */
+  continuous?: boolean;
 }
 
 export function ARLabelsOverlay({
@@ -414,6 +416,7 @@ export function ARLabelsOverlay({
   retryKey,
   onVideoRef,
   peopleCount: externalPeopleCount,
+  continuous,
 }: ARLabelsOverlayProps) {
   const latestPersonsRef = useRef<DetectedPerson[]>(persons);
   latestPersonsRef.current = persons;
@@ -487,11 +490,10 @@ export function ARLabelsOverlay({
 
       const currentTime = video.currentTime;
 
-      // Detect when the video loops: time jumps backward — stop running new detections
-      if (currentTime < maxTimeReached - 1 && maxTimeReached > 1 && !detectionDone) {
-        detectionDone = true;
+      // Detect when the video loops: time jumps backward
+      if (currentTime < maxTimeReached - 1 && maxTimeReached > 1) {
         // Persist final tracks to IndexedDB so they restore instantly on next visit
-        if (videoUrl && tracksRef.current.length > 0) {
+        if (!detectionDone && videoUrl && tracksRef.current.length > 0) {
           const toCache: CachedTrack[] = tracksRef.current
             .filter((t) => t.age >= MIN_AGE)
             .map((t) => ({
@@ -503,12 +505,18 @@ export function ARLabelsOverlay({
             }));
           void setCachedTracks(videoUrl, toCache);
         }
+        detectionDone = true; // stop Gemini re-analysis on subsequent loops
+        maxTimeReached = 0;
+        lastVideoTime = -1;
+        if (continuous) {
+          // Clear stale tracks so detection starts fresh on the new loop
+          tracksRef.current = [];
+        }
       }
       maxTimeReached = Math.max(maxTimeReached, currentTime);
 
-      // After one full pass, just redraw existing tracks (no new COCO-SSD detection)
-      // Also skip if video time hasn't changed (paused)
-      if (detectionDone || Math.abs(currentTime - lastVideoTime) < 0.01) {
+      // Skip if video time hasn't changed (paused)
+      if (Math.abs(currentTime - lastVideoTime) < 0.01) {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           drawTracks(
@@ -587,7 +595,8 @@ export function ARLabelsOverlay({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [hasVideo, modelReady]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasVideo, modelReady, continuous]);
 
   // Notify parent when status changes
   useEffect(() => {
