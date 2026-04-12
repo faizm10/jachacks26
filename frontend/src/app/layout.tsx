@@ -29,7 +29,27 @@ export const metadata: Metadata = {
     template: "%s · Foco",
   },
   description:
-    "Understand how a room is being used in real time — a calm, premium spatial awareness surface.",
+    "Turn cameras into a live 3D motion map. Not headcounts — behaviour. Spatial awareness for any campus or building.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico" },                        // legacy fallback
+    ],
+    apple: "/favicon.svg",
+  },
+  openGraph: {
+    title: "Foco — Spatial Awareness",
+    description:
+      "Turn cameras into a live 3D motion map. Not headcounts — behaviour.",
+    images: [{ url: "/og-image.svg", width: 1200, height: 630 }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Foco — Spatial Awareness",
+    description: "Turn cameras into a live 3D motion map. Not headcounts — behaviour.",
+    images: ["/og-image.svg"],
+  },
 };
 
 export default function RootLayout({

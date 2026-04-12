@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="geometricPrecision">
+  <style>
+    .bg  { fill: #000 }
+    .eye { fill: #fff }
+    .pup { fill: #000 }
+    .hi  { fill: #fff }
+    @media (prefers-color-scheme: light) {
+      .bg  { fill: #fff }
+      .eye { fill: #000 }
+      .pup { fill: #fff }
+      .hi  { fill: #000; opacity: .15 }
+    }
+  </style>
+
+  <rect width="64" height="64" rx="13" class="bg"/>
+
+  <!-- Left eye -->
+  <path d="M5,32 C5,24 29,24 29,32 C29,38 5,38 5,32 Z" class="eye"/>
+  <circle cx="17" cy="32" r="5.5" class="pup"/>
+  <circle cx="19"  cy="29.5" r="1.6" class="hi"/>
+
+  <!-- Right eye -->
+  <path d="M35,32 C35,24 59,24 59,32 C59,38 35,38 35,32 Z" class="eye"/>
+  <circle cx="47" cy="32" r="5.5" class="pup"/>
+  <circle cx="49"  cy="29.5" r="1.6" class="hi"/>
+</svg>
