@@ -25,7 +25,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 const SCALE = HEATMAP_SCALE;
-const HOVER_EMISSIVE = 0x4c6fa8;
+/** Hover rim — readable on warm light shells */
+const HOVER_EMISSIVE = 0x6a8eb5;
 
 const LABEL_Y_LIFT = 10;
 
@@ -440,7 +441,7 @@ export function JohnAbbottLibraryFloorThree({
     const scene = new THREE.Scene();
     const transparentBg = layoutVariant === "stackedEmbed";
     const defaultOrbitRadius = transparentBg ? 1280 : 1000;
-    scene.background = transparentBg ? null : new THREE.Color(0x0c0f14);
+    scene.background = transparentBg ? null : new THREE.Color(0xf4efe6);
 
     const camera = new THREE.PerspectiveCamera(38, 16 / 9, 1, 5000);
     const renderer = new THREE.WebGLRenderer({
@@ -455,9 +456,9 @@ export function JohnAbbottLibraryFloorThree({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    const amb = new THREE.AmbientLight(0xc8d4e8, 0.35);
+    const amb = new THREE.AmbientLight(0xfff4ea, 0.48);
     scene.add(amb);
-    const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+    const sun = new THREE.DirectionalLight(0xffffff, 0.78);
     sun.position.set(300, 520, -180);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -468,7 +469,7 @@ export function JohnAbbottLibraryFloorThree({
     sun.shadow.camera.top = 700;
     sun.shadow.camera.bottom = -700;
     scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x7eb8ff, 0.22);
+    const fill = new THREE.DirectionalLight(0xffe4c8, 0.2);
     fill.position.set(-220, 280, 320);
     scene.add(fill);
 
@@ -530,18 +531,18 @@ export function JohnAbbottLibraryFloorThree({
         const el = document.createElement("div");
         el.dataset.areaLabel = m.id;
         el.className =
-          "absolute left-0 top-0 flex min-w-0 max-w-[10rem] flex-col gap-0.5 rounded-lg border border-white/[0.14] bg-black/50 px-2.5 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-md";
+          "absolute left-0 top-0 flex min-w-0 max-w-[10rem] flex-col gap-0.5 rounded-lg border border-border/90 bg-popover/95 px-2.5 py-1.5 shadow-md backdrop-blur-md";
         el.style.borderLeftStyle = "solid";
         el.style.borderLeftWidth = "3px";
         el.style.borderLeftColor = m.accent;
         el.style.willChange = "transform, opacity";
         const floorEl = document.createElement("span");
         floorEl.className =
-          "text-[9px] font-semibold uppercase tracking-[0.16em] text-white/45";
+          "text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground";
         floorEl.textContent = m.floor;
         const titleEl = document.createElement("span");
         titleEl.className =
-          "text-[11px] font-semibold leading-snug tracking-tight text-white";
+          "text-[11px] font-semibold leading-snug tracking-tight text-foreground";
         titleEl.textContent = m.title;
         el.appendChild(floorEl);
         el.appendChild(titleEl);
@@ -559,7 +560,7 @@ export function JohnAbbottLibraryFloorThree({
         const el = document.createElement("div");
         el.dataset.zoneLabel = z.id;
         el.className =
-          "absolute left-0 top-0 flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-black/60 px-2.5 py-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-lg";
+          "absolute left-0 top-0 flex items-center gap-1.5 rounded-full border border-border/90 bg-popover/95 px-2.5 py-1 shadow-md backdrop-blur-lg";
         el.style.willChange = "transform, opacity";
         const dot = document.createElement("span");
         dot.style.width = "8px";
@@ -568,7 +569,7 @@ export function JohnAbbottLibraryFloorThree({
         dot.style.backgroundColor = z.accent;
         dot.style.boxShadow = `0 0 8px ${z.accent}`;
         const txt = document.createElement("span");
-        txt.className = "text-[10px] font-semibold tracking-wide text-white/80";
+        txt.className = "text-[10px] font-semibold tracking-wide text-foreground";
         txt.textContent = z.label;
         el.appendChild(dot);
         el.appendChild(txt);
@@ -1036,7 +1037,7 @@ export function JohnAbbottLibraryFloorThree({
       {!stackedEmbed ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div
-            className="inline-flex gap-0.5 rounded-lg border border-white/[0.08] bg-black/40 p-0.5"
+            className="inline-flex gap-0.5 rounded-lg border border-border/80 bg-popover/90 p-0.5"
             role="tablist"
             aria-label="Library floor">
             {(
@@ -1058,14 +1059,14 @@ export function JohnAbbottLibraryFloorThree({
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                   viewMode === key
-                    ? "bg-white/[0.12] text-white shadow-sm"
-                    : "text-white/45 hover:bg-white/[0.06] hover:text-white/75",
+                    ? "bg-primary/15 text-primary shadow-sm"
+                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
                 )}>
                 {label}
               </button>
             ))}
           </div>
-          <p className="text-[10px] tracking-wide text-white/35">
+          <p className="text-[10px] tracking-wide text-muted-foreground">
             {canvasChildren
               ? "Drag to orbit when not placing \u00b7 Scroll to zoom \u00b7 click plan corners"
               : effectiveViewMode === "stacked"
@@ -1086,7 +1087,7 @@ export function JohnAbbottLibraryFloorThree({
           stackedEmbed && fillColumn && "min-h-0 flex-1",
           stackedEmbed && !fillColumn && "aspect-[3/2]",
           !stackedEmbed &&
-            "aspect-[3/2] rounded-xl border border-white/[0.06] bg-[#0c0f14]",
+            "aspect-[3/2] rounded-xl border border-border/80 bg-muted/40",
           stackedEmbed && "rounded-none border-0 bg-transparent",
         )}
         aria-label={
@@ -1108,25 +1109,25 @@ export function JohnAbbottLibraryFloorThree({
 
         {!stackedEmbed && (
           <div className="pointer-events-none absolute bottom-2 left-2 z-40">
-            <div className="pointer-events-auto rounded-xl border border-white/[0.08] bg-black/60 px-3 py-2.5 backdrop-blur-sm">
+            <div className="pointer-events-auto rounded-xl border border-border/80 bg-popover/95 px-3 py-2.5 shadow-sm backdrop-blur-sm">
               {selected ? (
                 <>
-                  <p className="text-sm font-medium text-white/90">
+                  <p className="text-sm font-medium text-foreground">
                     {selected.id}
                   </p>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-white/50">
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
                     {selected.note}
                   </p>
-                  <p className="mt-2 text-[10px] text-white/35">
+                  <p className="mt-2 text-[10px] text-muted-foreground">
                     {JOHN_ABBOTT_LIBRARY_SUBTITLE}
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-medium text-white/75">
+                  <p className="text-sm font-medium text-foreground">
                     Select a room
                   </p>
-                  <p className="mt-0.5 text-[11px] text-white/40">
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
                     {JOHN_ABBOTT_LIBRARY_SUBTITLE}
                   </p>
                 </>

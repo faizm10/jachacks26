@@ -7,19 +7,19 @@ import type { CorridorCalibration } from "@/lib/api/calibration";
 function PointList({ label, points }: { label: string; points: [number, number][] }) {
   return (
     <div>
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/35">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
         {label}
       </p>
       <div className="grid grid-cols-2 gap-1.5">
         {points.map((pt, i) => (
           <div
             key={i}
-            className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2 py-1.5"
+            className="flex items-center gap-1.5 rounded-lg border border-border/80 bg-muted/40 px-2 py-1.5"
           >
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/[0.08] text-[9px] font-bold text-white/50">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
               {i + 1}
             </span>
-            <span className="font-mono text-[11px] text-white/60">
+            <span className="font-mono text-[11px] text-muted-foreground">
               {pt[0].toFixed(1)}, {pt[1].toFixed(1)}
             </span>
           </div>
@@ -36,7 +36,7 @@ function MiniFloorPreview({ cal }: { cal: CorridorCalibration }) {
   return (
     <svg
       viewBox={`0 0 ${size} ${size}`}
-      className="h-28 w-28 rounded-lg border border-white/[0.06] bg-black/30"
+      className="h-28 w-28 rounded-lg border border-border/80 bg-muted/50"
     >
       {/* Camera quad */}
       <polygon
@@ -79,7 +79,7 @@ export function CalibrationCard({ calibration }: { calibration: CorridorCalibrat
     return (
       <GlassPanel className="p-5">
         <SectionHeader title="Calibration" subtitle="No calibration data for this camera" />
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-muted-foreground">
           This camera has no homography calibration. Add one via the calibration tool to enable
           floor-plan mapping.
         </p>
@@ -93,7 +93,7 @@ export function CalibrationCard({ calibration }: { calibration: CorridorCalibrat
         title="Calibration"
         subtitle={`Homography mapping · ${calibration.floor_w}×${calibration.floor_h} floor`}
         action={
-          <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90">
+          <span className="rounded-full border border-emerald-600/30 bg-emerald-600/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-900">
             Active
           </span>
         }

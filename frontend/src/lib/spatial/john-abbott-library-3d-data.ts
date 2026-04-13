@@ -101,14 +101,17 @@ export const JOHN_ABBOTT_3D_MATS = {
   { color: number; opacity: number; edge: number }
 >;
 
-/** Dashboard (dark glass) albedo — MeshStandardMaterial-friendly */
+/**
+ * Parchment-shell albedo — warm paper / plaster volumes that read on a cream
+ * dashboard (MeshStandardMaterial). Keeps type accents in edges + subtle emissive.
+ */
 export const JOHN_ABBOTT_3D_MATS_DARK = {
-  open: { color: 0x2a3441, opacity: 0.94, edge: 0x5c6b7e, emissive: 0x0d1a14 },
-  study: { color: 0x1e2d44, opacity: 0.95, edge: 0x4a7ab0, emissive: 0x061018 },
-  hall: { color: 0x252a32, opacity: 0.9, edge: 0x4a5568, emissive: 0x080a0c },
-  exit: { color: 0x1a3024, opacity: 0.93, edge: 0x34d399, emissive: 0x041208 },
-  evac: { color: 0x1a3024, opacity: 0.93, edge: 0x4ade80, emissive: 0x041208 },
-  service: { color: 0x3a3220, opacity: 0.93, edge: 0xd4a017, emissive: 0x121008 },
+  open: { color: 0xe8dfd4, opacity: 0.93, edge: 0x9a8a7a, emissive: 0xc9beb2 },
+  study: { color: 0xd6e0ec, opacity: 0.93, edge: 0x6f8499, emissive: 0xb4c2d2 },
+  hall: { color: 0xdedad4, opacity: 0.9, edge: 0x8a8780, emissive: 0xc4c0b9 },
+  exit: { color: 0xcfe8da, opacity: 0.92, edge: 0x3d9f72, emissive: 0xa3d4bc },
+  evac: { color: 0xcae8d6, opacity: 0.92, edge: 0x34b86a, emissive: 0x9ed4b4 },
+  service: { color: 0xede2cf, opacity: 0.92, edge: 0xc49a52, emissive: 0xd9cbb0 },
 } as const satisfies Record<
   LibraryRoomType,
   { color: number; opacity: number; edge: number; emissive: number }

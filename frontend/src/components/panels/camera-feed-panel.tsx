@@ -18,27 +18,27 @@ import { createPortal } from "react-dom";
 function StatusBadge({ status }: { status: ReturnType<typeof useCamsAllFeeds>["status"] }) {
   if (status === "ready") {
     return (
-      <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90">
+      <span className="rounded-full border border-emerald-600/30 bg-emerald-600/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
         Live
       </span>
     );
   }
   if (status === "loading") {
     return (
-      <span className="rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">
+      <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Loading
       </span>
     );
   }
   if (status === "empty") {
     return (
-      <span className="rounded-full border border-white/12 bg-white/[0.05] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/45">
+      <span className="rounded-full border border-border bg-muted/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Empty
       </span>
     );
   }
   return (
-    <span className="rounded-full border border-red-400/25 bg-red-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-red-200/90">
+    <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-red-800">
       Error
     </span>
   );
@@ -71,28 +71,28 @@ function MediaExpandModal({ obj, onClose }: { obj: CamsLatestObject; onClose: ()
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" aria-hidden />
+      <div className="absolute inset-0 bg-stone-900/35 backdrop-blur-md" aria-hidden />
       <motion.div
         role="dialog"
         aria-modal="true"
         aria-label={`Expanded view: ${fileName}`}
-        className="relative z-10 flex max-h-[min(92vh,900px)] w-full max-w-[min(96vw,1280px)] flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-[rgba(6,8,12,0.92)] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+        className="relative z-10 flex max-h-[min(92vh,900px)] w-full max-w-[min(96vw,1280px)] flex-col overflow-hidden rounded-2xl border border-border bg-popover/95 shadow-[0_24px_60px_rgba(62,48,40,0.14)]"
         initial={{ opacity: 0, scale: 0.96, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring" as const, stiffness: 380, damping: 32 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3 sm:px-5">
-          <p className="min-w-0 truncate text-sm font-medium text-white/90">{fileName}</p>
+        <div className="flex items-center justify-between gap-3 border-b border-border/80 px-4 py-3 sm:px-5">
+          <p className="min-w-0 truncate text-sm font-medium text-foreground">{fileName}</p>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white/85 transition-colors hover:bg-white/[0.1]"
+            className="shrink-0 rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/80"
           >
             Close
           </button>
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center bg-black/50 p-3 sm:p-5">
+        <div className="flex min-h-0 flex-1 items-center justify-center bg-muted/40 p-3 sm:p-5">
           {obj.kind === "video" ? (
             <div className="relative w-full max-h-[min(78vh,760px)] aspect-video rounded-lg overflow-hidden">
               <ARLabelsOverlay
@@ -175,8 +175,8 @@ function VideoTile({
   }, []);
 
   const borderClass = isFloorActive
-    ? "border-sky-400/50 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_8px_32px_rgba(0,0,0,0.4)]"
-    : "border-white/[0.06] hover:border-white/[0.18] hover:shadow-[0_8px_32px_rgba(0,0,0,0.35)]";
+    ? "border-sky-500/45 shadow-[0_0_0_1px_rgba(14,165,233,0.2),0_8px_32px_rgba(62,48,40,0.12)]"
+    : "border-border/90 hover:border-primary/35 hover:shadow-[0_8px_32px_rgba(62,48,40,0.1)]";
 
   return (
     <div ref={tileRef} className="flex flex-col gap-0">
@@ -192,14 +192,14 @@ function VideoTile({
           }
         }}
         onDoubleClick={() => isVideo ? setArExpanded(true) : onExpand(obj)}
-        className={`group relative w-full cursor-pointer overflow-hidden rounded-2xl border bg-black/40 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-white/25 ${borderClass}`}
+        className={`group relative w-full cursor-pointer overflow-hidden rounded-2xl border bg-card/50 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring/40 ${borderClass}`}
       >
         <div className="aspect-video min-h-[11.5rem] w-full bg-black sm:min-h-[13rem] lg:min-h-[14.5rem]">
           {!errored ? (
             !inView ? (
               /* Placeholder when out of viewport — no video loaded */
               <div className="flex h-full w-full items-center justify-center">
-                <p className="text-[11px] text-white/20">{fileName}</p>
+                <p className="text-[11px] text-muted-foreground/60">{fileName}</p>
               </div>
             ) : isVideo ? (
               <ARLabelsOverlay
@@ -226,15 +226,15 @@ function VideoTile({
             )
           ) : (
             <div className="flex h-full w-full items-center justify-center gap-2">
-              <Clapperboard className="h-7 w-7 text-white/25" />
-              <p className="text-xs text-white/40">Failed to load</p>
+              <Clapperboard className="h-7 w-7 text-muted-foreground/50" />
+              <p className="text-xs text-muted-foreground">Failed to load</p>
             </div>
           )}
         </div>
 
         <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-1">
           {isFloorActive ? (
-            <span className="rounded-full border border-sky-400/40 bg-sky-500/25 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">
+            <span className="rounded-full border border-sky-500/35 bg-sky-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-800">
               Floor map
             </span>
           ) : null}
@@ -246,18 +246,18 @@ function VideoTile({
             e.stopPropagation();
             isVideo ? setArExpanded(true) : onExpand(obj);
           }}
-          className="absolute right-2 top-2 rounded-lg border border-white/15 bg-black/60 px-2 py-1 text-[10px] font-semibold text-white/70 backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80 hover:text-white"
+          className="absolute right-2 top-2 rounded-lg border border-border bg-popover/90 px-2 py-1 text-[10px] font-semibold text-muted-foreground backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-card hover:text-foreground"
         >
           ↗
         </button>
 
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-3 py-3 sm:px-4 sm:py-3.5">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-950/80 to-transparent px-3 py-3 sm:px-4 sm:py-3.5">
           <div className="flex items-center justify-between gap-2">
-            <p className="pointer-events-none truncate text-xs font-medium text-white/80 sm:text-[13px]">{fileName}</p>
+            <p className="pointer-events-none truncate text-xs font-medium text-stone-100 sm:text-[13px]">{fileName}</p>
             <Link
               href={`/camera/${encodeURIComponent(fileName.replace(/\.[^.]+$/, ""))}`}
               onClick={(e) => e.stopPropagation()}
-              className="shrink-0 rounded-full border border-white/15 bg-black/50 px-2.5 py-1 text-[10px] font-semibold text-white/70 backdrop-blur-sm transition-colors hover:bg-white/15 hover:text-white"
+              className="shrink-0 rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-stone-100 backdrop-blur-sm transition-colors hover:bg-white/20 hover:text-stone-50"
             >
               Details &rarr;
             </Link>
@@ -267,17 +267,17 @@ function VideoTile({
 
       {/* Description + retry below the tile */}
       {(desc || analysisStatus === "failed") && (
-        <div className="flex items-start gap-2 rounded-b-xl border border-t-0 border-white/[0.06] bg-white/[0.02] px-3 py-2">
+        <div className="flex items-start gap-2 rounded-b-xl border border-t-0 border-border/80 bg-muted/40 px-3 py-2">
           {desc ? (
-            <p className="flex-1 text-[11px] leading-relaxed text-white/45">{desc}</p>
+            <p className="flex-1 text-[11px] leading-relaxed text-muted-foreground">{desc}</p>
           ) : (
-            <p className="flex-1 text-[11px] text-red-300/70">Analysis failed</p>
+            <p className="flex-1 text-[11px] text-red-700">Analysis failed</p>
           )}
           {analysisStatus === "failed" && (
             <button
               type="button"
               onClick={handleRetry}
-              className="shrink-0 rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[10px] font-medium text-white/70 transition-colors hover:bg-white/[0.1] hover:text-white"
+              className="shrink-0 rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               Retry
             </button>
@@ -322,36 +322,36 @@ export function CameraFeedPanel({ selectedUrl, onSelect }: CameraFeedPanelProps)
       />
 
       {status === "loading" ? (
-        <div className="mt-4 flex min-h-[220px] items-center justify-center rounded-2xl border border-white/[0.06] bg-black/40">
+        <div className="mt-4 flex min-h-[220px] items-center justify-center rounded-2xl border border-border/80 bg-muted/50">
         <motion.div
-            className="h-8 w-8 rounded-full border-2 border-white/15 border-t-white/70"
+            className="h-8 w-8 rounded-full border-2 border-border border-t-primary"
             animate={{ rotate: 360 }}
             transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
             aria-label="Loading feed"
           />
         </div>
       ) : status === "empty" ? (
-        <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-2xl border border-white/[0.06] bg-black/40 px-6 text-center">
-          <p className="text-sm font-medium text-white/65">No media in {bucketName} yet</p>
-          <p className="max-w-sm text-xs text-white/40">
-            Upload .mp4 files to the <span className="text-white/55">{bucketName}</span> bucket.
+        <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-2xl border border-border/80 bg-muted/50 px-6 text-center">
+          <p className="text-sm font-medium text-foreground">No media in {bucketName} yet</p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            Upload .mp4 files to the <span className="text-foreground/80">{bucketName}</span> bucket.
           </p>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="mt-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-xs font-medium text-white/80 transition-colors hover:bg-white/[0.1]"
+            className="mt-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
           >
             Refresh
           </button>
         </div>
       ) : status === "error" ? (
-        <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.06] bg-black/40 px-6 text-center">
-          <p className="text-sm font-medium text-red-200/90">Could not load bucket</p>
-          <p className="max-w-md text-xs text-white/45">{error}</p>
+        <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-2xl border border-border/80 bg-muted/50 px-6 text-center">
+          <p className="text-sm font-medium text-red-700">Could not load bucket</p>
+          <p className="max-w-md text-xs text-muted-foreground">{error}</p>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-xs font-medium text-white/85 transition-colors hover:bg-white/[0.1]"
+            className="rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
           >
             Retry
           </button>

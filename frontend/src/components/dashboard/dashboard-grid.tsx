@@ -129,7 +129,7 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
         hidden: {},
         show: { transition: { staggerChildren: 0.07, delayChildren: 0.04 } },
       }}
-      className="mx-auto max-w-7xl space-y-6"
+      className="mx-auto max-w-7xl space-y-6 text-foreground"
     >
       {/* ═══ HERO: Floor map + Building vibe ═══ */}
       <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
@@ -157,11 +157,11 @@ export function DashboardGrid({ snapshot }: { snapshot: RoomSnapshot }) {
       {/* ═══ CAMERA FEEDS with inline detection overlay ═══ */}
       <motion.div variants={block} id="admin-section" className="scroll-mt-24">
         <div className="mb-3 flex items-center gap-2">
-          <div className="h-px flex-1 bg-white/[0.06]" />
-          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/25">
+          <div className="h-px flex-1 bg-border/80" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/70">
             Camera feeds & detection
           </span>
-          <div className="h-px flex-1 bg-white/[0.06]" />
+          <div className="h-px flex-1 bg-border/80" />
         </div>
       </motion.div>
 

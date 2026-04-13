@@ -218,7 +218,7 @@ export function HeatmapPanel({
     return (
       <GlassPanel className="p-5">
         <SectionHeader title="Behavior heatmap" subtitle={subtitle} />
-        <p className="mt-3 text-xs text-white/40">
+        <p className="mt-3 text-xs text-muted-foreground">
           Select a feed and run analysis to see where detected people occupy space.
         </p>
       </GlassPanel>
@@ -231,20 +231,20 @@ export function HeatmapPanel({
         title="Behavior heatmap"
         subtitle={subtitle}
         action={
-          <span className="text-[10px] font-medium text-white/30">
+          <span className="text-[10px] font-medium text-muted-foreground">
             {gridW}×{gridH}
           </span>
         }
       />
       <div
-        className="relative mt-3 w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/30"
+        className="relative mt-3 w-full overflow-hidden rounded-xl border border-border/80 bg-muted/50"
         style={{ aspectRatio: 1 }}
       >
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
       </div>
       {peakCaption ? (
-        <p className="mt-2 text-[11px] text-white/45">
-          Strongest region: <span className="text-white/70">{peakCaption}</span>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Strongest region: <span className="text-foreground">{peakCaption}</span>
         </p>
       ) : null}
     </GlassPanel>

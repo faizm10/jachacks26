@@ -57,13 +57,13 @@ export function SpatialMapWorkspace() {
   }, [regions]);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 text-foreground">
       {/* ── Header ── */}
       <motion.div variants={block} initial="hidden" animate="show">
-        <h1 className="text-lg font-semibold tracking-tight text-white">
+        <h1 className="text-lg font-semibold tracking-tight text-foreground">
           Spatial map
         </h1>
-        <p className="mt-1 text-sm text-white/40">
+        <p className="mt-1 text-sm text-muted-foreground">
           Map camera footage to building regions. Select a camera for each zone — activity bars appear on the 3D model in real time.
         </p>
       </motion.div>
@@ -79,7 +79,7 @@ export function SpatialMapWorkspace() {
         >
           <div className="mb-2 flex items-center gap-3">
             <div
-              className="inline-flex rounded-md border border-white/5 bg-white/2 p-px"
+              className="inline-flex rounded-md border border-border/80 bg-muted/40 p-px"
               role="tablist"
               aria-label="Visualization mode"
             >
@@ -91,8 +91,8 @@ export function SpatialMapWorkspace() {
                 className={cn(
                   "rounded-[5px] px-2.5 py-1 text-[11px] font-medium transition-colors",
                   view === "mesh"
-                    ? "bg-white/8 text-white/70"
-                    : "text-white/30 hover:bg-white/4 hover:text-white/50",
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
                 )}
               >
                 Solid 3D
@@ -105,15 +105,15 @@ export function SpatialMapWorkspace() {
                 className={cn(
                   "rounded-[5px] px-2.5 py-1 text-[11px] font-medium transition-colors",
                   view === "pointCloud"
-                    ? "bg-white/8 text-white/70"
-                    : "text-white/30 hover:bg-white/4 hover:text-white/50",
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
                 )}
               >
                 Point scan
               </button>
             </div>
             {bars.length > 0 && (
-              <span className="text-[10px] text-white/25">
+              <span className="text-[10px] text-muted-foreground/80">
                 {bars.length} people mapped from video
               </span>
             )}
@@ -147,7 +147,7 @@ export function SpatialMapWorkspace() {
           transition={{ delay: 0.1 }}
           className="lg:col-span-4"
         >
-          <h2 className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">
+          <h2 className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             Camera → region mapping
           </h2>
           <CameraMappingPanel

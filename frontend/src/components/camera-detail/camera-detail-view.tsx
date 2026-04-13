@@ -77,14 +77,14 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
       <div className="flex items-center gap-3">
         <Link
           href="/#camera-feed"
-          className="flex items-center gap-1.5 rounded-xl border border-white/8 bg-white/4 px-3 py-1.5 text-xs font-medium text-white/60 transition-colors hover:bg-white/8 hover:text-white/90"
+          className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back
         </Link>
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-white">{label}</h1>
-          <p className="text-xs text-white/40">
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">{label}</h1>
+          <p className="text-xs text-muted-foreground">
             {roomMapping ? `${roomMapping.zone} · ${roomMapping.floor === "f1" ? "1st floor" : "Basement"}` : "Camera detail view"}
           </p>
         </div>
@@ -97,7 +97,7 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
           subtitle={feed ? feed.path.split("/").pop() ?? "" : "Loading..."}
           action={
             analysis ? (
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90">
+              <span className="rounded-full border border-emerald-600/30 bg-emerald-600/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-900">
                 {analysis.peopleCount ?? 0} detected
               </span>
             ) : null
@@ -105,22 +105,22 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
         />
 
         {status === "loading" ? (
-          <div className="flex min-h-[300px] items-center justify-center rounded-xl border border-white/6 bg-black/40">
+          <div className="flex min-h-[300px] items-center justify-center rounded-xl border border-border/80 bg-muted/50">
             <motion.div
-              className="h-8 w-8 rounded-full border-2 border-white/15 border-t-white/70"
+              className="h-8 w-8 rounded-full border-2 border-border border-t-primary"
               animate={{ rotate: 360 }}
               transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
             />
           </div>
         ) : !feed ? (
-          <div className="flex min-h-[300px] flex-col items-center justify-center gap-2 rounded-xl border border-white/6 bg-black/40 text-center">
-            <p className="text-sm font-medium text-white/60">Camera not found</p>
-            <p className="max-w-sm text-xs text-white/40">
+          <div className="flex min-h-[300px] flex-col items-center justify-center gap-2 rounded-xl border border-border/80 bg-muted/50 text-center">
+            <p className="text-sm font-medium text-foreground">Camera not found</p>
+            <p className="max-w-sm text-xs text-muted-foreground">
               No feed matching &ldquo;{cameraId}&rdquo; was found in the storage bucket.
             </p>
           </div>
         ) : isVideo ? (
-          <div className="relative w-full overflow-hidden rounded-xl border border-white/6" style={{ aspectRatio: "16 / 9" }}>
+          <div className="relative w-full overflow-hidden rounded-xl border border-border/80" style={{ aspectRatio: "16 / 9" }}>
             <ARLabelsOverlay
               videoUrl={feed.url}
               persons={analysis?.persons ?? []}
@@ -132,7 +132,7 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
             />
           </div>
         ) : (
-          <div className="relative w-full overflow-hidden rounded-xl border border-white/6">
+          <div className="relative w-full overflow-hidden rounded-xl border border-border/80">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img alt={label} src={feed.url} className="w-full object-contain" />
           </div>
@@ -140,7 +140,7 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
 
         {/* Scene description */}
         {analysis?.sceneDescription ? (
-          <p className="mt-3 rounded-lg border border-white/6 bg-white/2 px-3 py-2 text-[11px] leading-relaxed text-white/50">
+          <p className="mt-3 rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
             {analysis.sceneDescription}
           </p>
         ) : null}
@@ -162,7 +162,7 @@ export function CameraDetailView({ cameraId }: { cameraId: string }) {
             }
             action={
               livePersons && livePersons.length > 0 ? (
-                <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90">
+                <span className="flex items-center gap-1.5 rounded-full border border-emerald-600/30 bg-emerald-600/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-900">
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />

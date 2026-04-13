@@ -97,37 +97,37 @@ export const AR_LABEL_LEGEND_ROWS: ArLabelLegendRow[] = [
     id: "locked",
     swatchClass: "bg-pink-400",
     title: "Pink",
-    description: "Desk / locked-in focus — typing, laptop, tablet, reading, writing, studying, coding, …",
+    description: "Desk / focus (typing, reading, laptop, …)",
   },
   {
     id: "social",
     swatchClass: "bg-sky-400",
     title: "Sky",
-    description: "Social — talking, conversation, chatting, presenting to others, …",
+    description: "Social (talking, presenting, …)",
   },
   {
     id: "motion",
     swatchClass: "bg-amber-400",
     title: "Amber",
-    description: "Motion — walking, running, dancing, pacing, leaving, entering, …",
+    description: "Motion (walking, entering, …)",
   },
   {
     id: "phone",
     swatchClass: "bg-violet-400",
     title: "Violet",
-    description: "Phone — on the phone, call, smartphone, texting, …",
+    description: "Phone / texting",
   },
   {
     id: "eating",
     swatchClass: "bg-rose-400",
     title: "Rose",
-    description: "Eating / drinking — meal, snack, lunch, coffee, …",
+    description: "Eating / drinking",
   },
   {
     id: "default",
     swatchClass: "bg-emerald-400",
     title: "Green",
-    description: "Default — other activities or generic “person” before labels load.",
+    description: "Other or generic “person”",
   },
 ];
 
@@ -136,13 +136,13 @@ export const AR_LABEL_LEGEND_PIPELINE_ROWS: ArLabelLegendRow[] = [
   {
     id: "pending",
     swatchClass: "bg-amber-400",
-    title: "Amber (pulsing)",
-    description: "Waiting — “analyzing…” until the frame is labeled.",
+    title: "Amber (pulse)",
+    description: "Analyzing…",
   },
   {
     id: "failed",
     swatchClass: "bg-red-400",
     title: "Red",
-    description: "Error — analysis failed for that frame.",
+    description: "Analysis failed",
   },
 ];
