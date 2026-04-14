@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { cn } from "@/lib/utils";
 
 export function TopNav({
@@ -32,6 +33,13 @@ export function TopNav({
           <span className="hidden rounded-full border border-border/80 bg-muted/50 px-3 py-1 text-[11px] font-medium text-foreground/70 sm:inline">
             API: Python (soon)
           </span>
+          <AnimatedThemeToggler
+            className={cn(
+              "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/90 bg-card/60 text-muted-foreground",
+              "hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
+              "[&_svg]:h-4 [&_svg]:w-4",
+            )}
+          />
         </nav>
       </div>
     </header>

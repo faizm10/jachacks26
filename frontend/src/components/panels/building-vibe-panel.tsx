@@ -13,10 +13,10 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 type VibeKind = "locked-in" | "social" | "collab" | "transit";
 
 const VIBE_META: Record<VibeKind, { label: string; color: string; hex: string }> = {
-  "locked-in": { label: "Locked In", color: "text-red-800", hex: "#ef4444" },
-  social:      { label: "Social",    color: "text-orange-800", hex: "#f97316" },
-  collab:      { label: "Collaborative", color: "text-violet-800", hex: "#8b5cf6" },
-  transit:     { label: "Transit",   color: "text-slate-700", hex: "#64748b" },
+  "locked-in": { label: "Locked In", color: "text-red-700 dark:text-red-400", hex: "#ef4444" },
+  social:      { label: "Social",    color: "text-orange-700 dark:text-orange-400", hex: "#f97316" },
+  collab:      { label: "Collaborative", color: "text-violet-700 dark:text-violet-300", hex: "#8b5cf6" },
+  transit:     { label: "Transit",   color: "text-slate-600 dark:text-slate-400", hex: "#64748b" },
 };
 
 /* ── Room vibe data structure ── */
@@ -179,21 +179,21 @@ const FALLBACK_ROOMS: Record<string, RoomVibeData> = {
 /* ── Noise / crowd helpers ── */
 
 function noiseVibe(db: number): { label: string; emoji: string; color: string } {
-  if (db < 20) return { label: "Silent", emoji: "🤫", color: "text-cyan-800" };
-  if (db < 35) return { label: "Whisper-quiet", emoji: "🧘", color: "text-cyan-800" };
-  if (db < 50) return { label: "Chill murmur", emoji: "☕", color: "text-emerald-800" };
-  if (db < 65) return { label: "Chatty", emoji: "💬", color: "text-amber-800" };
-  if (db < 80) return { label: "Buzzing", emoji: "🐝", color: "text-orange-800" };
-  return { label: "Loud AF", emoji: "🔊", color: "text-red-800" };
+  if (db < 20) return { label: "Silent", emoji: "🤫", color: "text-cyan-700 dark:text-cyan-400" };
+  if (db < 35) return { label: "Whisper-quiet", emoji: "🧘", color: "text-cyan-700 dark:text-cyan-400" };
+  if (db < 50) return { label: "Chill murmur", emoji: "☕", color: "text-emerald-700 dark:text-emerald-400" };
+  if (db < 65) return { label: "Chatty", emoji: "💬", color: "text-amber-700 dark:text-amber-400" };
+  if (db < 80) return { label: "Buzzing", emoji: "🐝", color: "text-orange-700 dark:text-orange-400" };
+  return { label: "Loud AF", emoji: "🔊", color: "text-red-700 dark:text-red-400" };
 }
 
 function crowdVibe(count: number): { label: string; tag: string; color: string } {
   if (count === 0) return { label: "Ghost town", tag: "empty", color: "text-muted-foreground" };
-  if (count <= 3) return { label: "Cozy", tag: "low-key", color: "text-cyan-800" };
-  if (count <= 8) return { label: "Vibing", tag: "just right", color: "text-emerald-800" };
-  if (count <= 15) return { label: "Packed", tag: "busy", color: "text-amber-800" };
-  if (count <= 25) return { label: "Sardines", tag: "crowded", color: "text-orange-800" };
-  return { label: "Main character energy", tag: "maxed out", color: "text-red-800" };
+  if (count <= 3) return { label: "Cozy", tag: "low-key", color: "text-cyan-700 dark:text-cyan-400" };
+  if (count <= 8) return { label: "Vibing", tag: "just right", color: "text-emerald-700 dark:text-emerald-400" };
+  if (count <= 15) return { label: "Packed", tag: "busy", color: "text-amber-700 dark:text-amber-400" };
+  if (count <= 25) return { label: "Sardines", tag: "crowded", color: "text-orange-700 dark:text-orange-400" };
+  return { label: "Main character energy", tag: "maxed out", color: "text-red-700 dark:text-red-400" };
 }
 
 const CAROUSEL_INTERVAL = 6000;

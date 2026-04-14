@@ -86,7 +86,7 @@ export function Sidebar({
 
       {/* Desktop: floating top bar, centered horizontally */}
       <div className="pointer-events-none fixed left-0 right-0 top-5 z-50 hidden justify-center lg:flex">
-        <nav className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-border/80 bg-card/85 px-2 py-1.5 shadow-lg shadow-stone-900/10 backdrop-blur-2xl">
+        <nav className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-border/80 bg-card/85 px-2 py-1.5 shadow-lg shadow-black/40 backdrop-blur-2xl dark:shadow-black/50">
           {/* Logo */}
           <div className="flex items-center gap-2 px-2 pr-3">
             <LogoMark className="h-6 w-6" />

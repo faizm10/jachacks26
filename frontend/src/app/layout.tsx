@@ -1,7 +1,10 @@
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Caveat, Playfair_Display } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
+
+const themeInitScript = `(function(){try{var t=localStorage.getItem("theme");var r=document.documentElement;if(t==="light")r.classList.remove("dark");else r.classList.add("dark");}catch(e){}})();`;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -58,10 +61,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${caveat.variable} ${playfairDisplay.variable} min-h-screen bg-background antialiased text-foreground`}
       >
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
         <DashboardShell>{children}</DashboardShell>
       </body>
     </html>
