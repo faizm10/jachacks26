@@ -12,12 +12,12 @@ export function GlassButton({
   ...props
 }: HTMLMotionProps<"button"> & { variant?: Variant }) {
   const base =
-    "relative inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium tracking-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25 disabled:pointer-events-none disabled:opacity-40";
+    "relative inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium tracking-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-40";
 
   const styles =
     variant === "primary"
-      ? "bg-white/[0.12] text-white border border-white/[0.14] hover:bg-white/[0.16]"
-      : "bg-transparent text-white/80 border border-white/[0.08] hover:bg-white/[0.06] hover:text-white";
+      ? "border border-primary/25 bg-primary/12 text-primary hover:bg-primary/18"
+      : "border border-border/90 bg-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground";
 
   return (
     <motion.button

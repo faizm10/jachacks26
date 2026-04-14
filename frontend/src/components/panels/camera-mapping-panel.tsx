@@ -59,22 +59,22 @@ function CameraPickerModal({
       className="fixed inset-0 z-[200] flex items-center justify-center p-4"
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-stone-900/35 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        className="relative z-10 w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0c0f14] shadow-2xl shadow-black/60"
+        className="relative z-10 w-full max-w-2xl rounded-2xl border border-border bg-popover/95 shadow-[0_24px_60px_rgba(62,48,40,0.14)]"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/6 px-5 py-3.5">
+        <div className="flex items-center justify-between border-b border-border/80 px-5 py-3.5">
           <div>
-            <p className="text-sm font-semibold text-white/90">
+            <p className="text-sm font-semibold text-foreground">
               {step === "pick" ? "Select camera feed" : step === "calibrating" ? "Confirming orientation…" : "Generating activity map…"}
             </p>
-            <p className="mt-0.5 text-[11px] text-white/35">
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
               {region.label} · {region.floor === "f1" ? "1st floor" : "Basement"}
             </p>
           </div>
@@ -82,7 +82,7 @@ function CameraPickerModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-white/30 transition-colors hover:bg-white/5 hover:text-white/60"
+              className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
@@ -100,10 +100,10 @@ function CameraPickerModal({
                   key={cam.name}
                   type="button"
                   onClick={() => handleSelect(cam)}
-                  className="group relative overflow-hidden rounded-xl border border-white/8 bg-black/40 text-left transition-all hover:border-white/20 hover:shadow-lg"
+                  className="group relative overflow-hidden rounded-xl border border-border/90 bg-muted/40 text-left transition-all hover:border-primary/30 hover:shadow-md"
                 >
                   {/* Video thumbnail */}
-                  <div className="aspect-video w-full bg-black">
+                  <div className="aspect-video w-full bg-stone-950">
                     <video
                       src={cam.url}
                       muted
@@ -117,7 +117,7 @@ function CameraPickerModal({
                     />
                   </div>
                   <div className="px-3 py-2">
-                    <p className="truncate text-[11px] font-medium text-white/70 group-hover:text-white/90">
+                    <p className="truncate text-[11px] font-medium text-muted-foreground group-hover:text-foreground">
                       {cam.path}
                     </p>
                   </div>
@@ -149,19 +149,19 @@ function CameraPickerModal({
 
               <p className={cn(
                 "text-sm font-semibold",
-                step === "calibrating" ? "text-amber-300" : "text-emerald-300",
+                step === "calibrating" ? "text-amber-800" : "text-emerald-800",
               )}>
                 {step === "calibrating" ? "Confirming spatial orientation" : "Mapping activity to floor plan"}
               </p>
 
-              <p className="mt-2 max-w-xs text-center text-[12px] leading-relaxed text-white/40">
+              <p className="mt-2 max-w-xs text-center text-[12px] leading-relaxed text-muted-foreground">
                 {step === "calibrating"
                   ? "Aligning camera perspective with building geometry and verifying corner correspondence…"
                   : "Running person detection and placing activity bars on the 3D model…"}
               </p>
 
-              <p className="mt-4 text-[11px] text-white/25">
-                Feed: <span className="text-white/50">{selectedCam.path}</span>
+              <p className="mt-4 text-[11px] text-muted-foreground/80">
+                Feed: <span className="text-foreground">{selectedCam.path}</span>
               </p>
             </div>
           )}
@@ -196,30 +196,30 @@ export function CameraMappingPanel({
 
   return (
     <>
-      <div className="rounded-xl border border-white/8 bg-[#0a0c10]">
+      <div className="rounded-xl border border-border/80 bg-card/90">
         {/* Console header */}
-        <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
+        <div className="flex items-center justify-between border-b border-border/80 px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <svg viewBox="0 0 24 24" className="h-4 w-4 text-white/30" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-white/40">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
               Zone monitor
             </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-600" />
             </span>
-            <span className="text-[10px] font-medium text-emerald-400/60">
+            <span className="text-[10px] font-medium text-emerald-800">
               {regions.filter((r) => r.status === "done").length}/{regions.length} online
             </span>
           </div>
         </div>
 
         {/* Camera channels */}
-        <div className="divide-y divide-white/4">
+        <div className="divide-y divide-border/60">
           {/* Data-driven channels */}
           {dataDriven.map((region, i) => {
             const isActive = activeRegionId === region.id;
@@ -244,14 +244,14 @@ export function CameraMappingPanel({
                       ? "bg-emerald-500/15 text-emerald-400"
                       : region.status === "analyzing"
                         ? "bg-amber-500/15 text-amber-400 animate-pulse"
-                        : "bg-white/5 text-white/25",
+                        : "bg-muted text-muted-foreground/70",
                   )}>
                     {channelNum}
                   </span>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-[13px] font-medium text-white/85">{region.label}</p>
+                      <p className="truncate text-[13px] font-medium text-foreground">{region.label}</p>
                       {region.status === "analyzing" && (
                         <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider text-amber-400/70">
                           Scanning…
@@ -263,7 +263,7 @@ export function CameraMappingPanel({
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-white/25">
+                    <p className="text-[10px] text-muted-foreground/80">
                       {region.floor === "f1" ? "F1" : "B1"} · {region.roomIds.join(", ")}
                     </p>
                   </div>
@@ -276,7 +276,7 @@ export function CameraMappingPanel({
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setPickerRegion(region); }}
                       disabled={camsLoading}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 bg-transparent px-3 py-2 text-[11px] font-medium text-white/35 transition-colors hover:border-white/20 hover:bg-white/4 hover:text-white/55 disabled:opacity-40"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-transparent px-3 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-muted/50 hover:text-foreground disabled:opacity-40"
                     >
                       <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path d="M12 4v16m8-8H4" />
@@ -284,13 +284,13 @@ export function CameraMappingPanel({
                       Assign camera feed
                     </button>
                   ) : region.assignedVideo ? (
-                    <div className="flex items-center justify-between rounded-lg border border-white/8 bg-white/3 px-3 py-1.5">
-                      <span className="truncate text-[11px] text-white/50">{region.assignedVideo}</span>
+                    <div className="flex items-center justify-between rounded-lg border border-border/80 bg-muted/40 px-3 py-1.5">
+                      <span className="truncate text-[11px] text-muted-foreground">{region.assignedVideo}</span>
                       {region.status === "done" && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setPickerRegion(region); }}
-                          className="ml-2 shrink-0 text-[10px] text-white/30 hover:text-white/60"
+                          className="ml-2 shrink-0 text-[10px] text-muted-foreground hover:text-foreground"
                         >
                           Change
                         </button>
@@ -304,7 +304,7 @@ export function CameraMappingPanel({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onAssign(region.id, region.assignedVideo); }}
-                      className="text-[10px] font-medium text-red-400/80 hover:text-red-300"
+                      className="text-[10px] font-medium text-red-700 hover:text-red-900"
                     >
                       Retry
                     </button>
@@ -317,11 +317,11 @@ export function CameraMappingPanel({
           {/* Separator */}
           {hardcoded.length > 0 && dataDriven.length > 0 && (
             <div className="flex items-center gap-2 px-4 py-2">
-              <div className="h-px flex-1 bg-white/4" />
-              <span className="text-[8px] font-bold uppercase tracking-[0.25em] text-white/15">
+              <div className="h-px flex-1 bg-border/80" />
+              <span className="text-[8px] font-bold uppercase tracking-[0.25em] text-muted-foreground/60">
                 Fixed sensors
               </span>
-              <div className="h-px flex-1 bg-white/4" />
+              <div className="h-px flex-1 bg-border/80" />
             </div>
           )}
 
@@ -347,8 +347,8 @@ export function CameraMappingPanel({
                 </span>
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-medium text-white/55">{region.label}</p>
-                  <p className="text-[9px] text-white/20">
+                  <p className="truncate text-[12px] font-medium text-foreground">{region.label}</p>
+                  <p className="text-[9px] text-muted-foreground/80">
                     {region.floor === "f1" ? "F1" : "B1"} · {region.roomIds.join(", ")}
                   </p>
                 </div>

@@ -207,7 +207,7 @@ const AMBER = "rgb(251, 191, 36)";
 const AMBER_SEMI = "rgba(251, 191, 36, 0.6)";
 const RED = "rgb(248, 113, 113)";
 const RED_SEMI = "rgba(248, 113, 113, 0.6)";
-const LABEL_BG = "rgba(0, 0, 0, 0.8)";
+const LABEL_BG = "rgba(42, 34, 28, 0.88)";
 const CORNER_LEN = 10;
 
 type GeminiDrawStatus = "idle" | "sending" | "done" | "failed";
@@ -859,7 +859,7 @@ export function ARLabelsOverlay({
         {displayCount > 0 && (
           <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
             <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-            <span className="rounded-full border border-emerald-400/25 bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-sm">
+            <span className="rounded-full border border-emerald-600/30 bg-stone-950/70 px-2 py-0.5 text-[10px] font-semibold text-emerald-200 backdrop-blur-sm">
               {displayCount} people
             </span>
           </div>
@@ -887,14 +887,14 @@ export function ARLabelsOverlay({
           </>
         ) : null}
         {hasVideo && !modelReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2">
+          <div className="absolute inset-0 flex items-center justify-center bg-stone-900/30 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-full border border-border bg-popover/95 px-4 py-2 shadow-sm">
               <motion.div
-                className="h-4 w-4 rounded-full border-2 border-white/20 border-t-emerald-400"
+                className="h-4 w-4 rounded-full border-2 border-border border-t-emerald-600"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
               />
-              <span className="text-xs text-white/60">Loading detection model…</span>
+              <span className="text-xs text-muted-foreground">Loading detection model…</span>
             </div>
           </div>
         )}
@@ -903,7 +903,7 @@ export function ARLabelsOverlay({
           <button
             type="button"
             onClick={() => setExpanded(false)}
-            className="absolute right-4 top-4 z-30 rounded-full border border-white/20 bg-black/70 px-3 py-1.5 text-xs font-medium text-white/80 backdrop-blur-sm transition-colors hover:bg-black/90 hover:text-white"
+            className="absolute right-4 top-4 z-30 rounded-full border border-border bg-popover/95 px-3 py-1.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted"
           >
             Exit fullscreen
           </button>
@@ -911,7 +911,7 @@ export function ARLabelsOverlay({
         {/* Scene description in fullscreen */}
         {expanded && sceneDescription && (
           <div className="absolute bottom-4 left-4 right-4 z-20">
-            <p className="rounded-lg bg-black/70 px-3 py-2 text-sm text-white/60 backdrop-blur-sm">
+            <p className="rounded-lg border border-border/80 bg-popover/95 px-3 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur-sm">
               {sceneDescription}
             </p>
           </div>
@@ -951,8 +951,8 @@ export function ARLabelsOverlay({
               <span
                 className={
                   lockedInChip
-                    ? "rounded-full border border-pink-400/30 bg-pink-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-pink-200/95"
-                    : "rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90"
+                    ? "rounded-full border border-pink-500/35 bg-pink-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-pink-900"
+                    : "rounded-full border border-emerald-600/30 bg-emerald-600/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-900"
                 }
               >
                 {displayCount} people
@@ -963,12 +963,12 @@ export function ARLabelsOverlay({
       />
 
       {sceneDescription && (
-        <p className="mt-1 text-[11px] text-white/40">{sceneDescription}</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">{sceneDescription}</p>
       )}
 
       <ArLabelColorLegend />
 
-      <div className="relative mt-3 aspect-video w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/60">
+      <div className="relative mt-3 aspect-video w-full overflow-hidden rounded-xl border border-border/80 bg-muted/50">
         {hasVideo ? (
           <>
             <video
@@ -994,7 +994,7 @@ export function ARLabelsOverlay({
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="absolute right-3 top-3 z-20 rounded-lg border border-white/15 bg-black/60 p-1.5 text-white/60 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white/90"
+              className="absolute right-3 top-3 z-20 rounded-lg border border-border bg-popover/95 p-1.5 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted hover:text-foreground"
               title="Expand"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1004,25 +1004,25 @@ export function ARLabelsOverlay({
           </>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2">
-            <div className="text-2xl text-white/15">
+            <div className="text-2xl text-muted-foreground/30">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <rect x="2" y="3" width="20" height="14" rx="2" />
                 <path d="M8 21h8M12 17v4" />
               </svg>
             </div>
-            <p className="text-xs text-white/30">Select a camera feed to see detections</p>
+            <p className="text-xs text-muted-foreground">Select a camera feed to see detections</p>
           </div>
         )}
 
         {hasVideo && !modelReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2">
+          <div className="absolute inset-0 flex items-center justify-center bg-stone-900/25 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-full border border-border bg-popover/95 px-4 py-2 shadow-sm">
               <motion.div
-                className="h-4 w-4 rounded-full border-2 border-white/20 border-t-emerald-400"
+                className="h-4 w-4 rounded-full border-2 border-border border-t-emerald-600"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
               />
-              <span className="text-xs text-white/60">Loading detection model…</span>
+              <span className="text-xs text-muted-foreground">Loading detection model…</span>
             </div>
           </div>
         )}
@@ -1131,23 +1131,23 @@ function ExpandedARModal({
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/85 backdrop-blur-md" aria-hidden />
+      <div className="absolute inset-0 bg-stone-900/35 backdrop-blur-md" aria-hidden />
       <motion.div
         role="dialog"
         aria-modal="true"
         aria-label="Expanded AR labels view"
-        className="relative z-10 flex max-h-[min(94vh,960px)] w-full max-w-[min(96vw,1400px)] flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-[rgba(6,8,12,0.95)] shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
+        className="relative z-10 flex max-h-[min(94vh,960px)] w-full max-w-[min(96vw,1400px)] flex-col overflow-hidden rounded-2xl border border-border bg-popover/95 shadow-[0_24px_60px_rgba(62,48,40,0.14)]"
         initial={{ opacity: 0, scale: 0.96, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring" as const, stiffness: 380, damping: 32 }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-3">
+        <div className="flex items-center justify-between gap-3 border-b border-border/80 px-5 py-3">
           <div className="flex items-center gap-3">
-            <p className="text-sm font-medium text-white/90">AR Labels — Expanded</p>
+            <p className="text-sm font-medium text-foreground">AR Labels — Expanded</p>
             {personCount > 0 && (
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-300">
+              <span className="rounded-full border border-emerald-600/30 bg-emerald-600/12 px-2.5 py-1 text-[10px] font-semibold text-emerald-800">
                 {personCount} people
               </span>
             )}
@@ -1155,18 +1155,18 @@ function ExpandedARModal({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white/85 transition-colors hover:bg-white/[0.1]"
+            className="shrink-0 rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/80"
           >
             Close
           </button>
         </div>
 
         {sceneDescription && (
-          <p className="border-b border-white/[0.05] px-5 py-2 text-[11px] text-white/40">{sceneDescription}</p>
+          <p className="border-b border-border/60 px-5 py-2 text-[11px] text-muted-foreground">{sceneDescription}</p>
         )}
 
         {/* Video + overlay */}
-        <div className="relative flex min-h-0 flex-1 items-center justify-center bg-black/50 p-3 sm:p-5">
+        <div className="relative flex min-h-0 flex-1 items-center justify-center bg-muted/40 p-3 sm:p-5">
           <div className="relative w-full">
             <video
               ref={expandedVideoRef}

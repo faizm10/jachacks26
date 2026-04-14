@@ -231,7 +231,7 @@ export function PointCloudFloorPlan({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     // Lighting
-    scene.add(new THREE.AmbientLight(0xc8d4e8, 0.5));
+    scene.add(new THREE.AmbientLight(0xfff4ea, 0.54));
     const sun = new THREE.DirectionalLight(0xffffff, 0.6);
     sun.position.set(300, 520, -180);
     scene.add(sun);
@@ -267,7 +267,7 @@ export function PointCloudFloorPlan({
         const el = document.createElement("div");
         el.dataset.zoneLabel = z.id;
         el.className =
-          "absolute left-0 top-0 flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-black/60 px-2.5 py-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-lg";
+          "absolute left-0 top-0 flex items-center gap-1.5 rounded-full border border-border/90 bg-popover/95 px-2.5 py-1 shadow-md backdrop-blur-lg";
         el.style.willChange = "transform, opacity";
         const dot = document.createElement("span");
         dot.style.width = "8px";
@@ -276,7 +276,7 @@ export function PointCloudFloorPlan({
         dot.style.backgroundColor = z.accent;
         dot.style.boxShadow = `0 0 8px ${z.accent}`;
         const txt = document.createElement("span");
-        txt.className = "text-[10px] font-semibold tracking-wide text-white/80";
+        txt.className = "text-[10px] font-semibold tracking-wide text-foreground";
         txt.textContent = z.label;
         el.appendChild(dot);
         el.appendChild(txt);
@@ -437,10 +437,10 @@ export function PointCloudFloorPlan({
     >
       <div className="flex flex-wrap items-center justify-end gap-2">
         <div className="flex items-center gap-2">
-          <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-200/80">
+          <span className="rounded-full border border-cyan-800/28 bg-card/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-950 shadow-sm">
             {(pointCount / 1000).toFixed(1)}K points
           </span>
-          <p className="text-[10px] tracking-wide text-white/35">Drag to orbit · scroll to zoom</p>
+          <p className="text-[10px] tracking-wide text-muted-foreground">Drag to orbit · scroll to zoom</p>
         </div>
       </div>
 
@@ -450,7 +450,7 @@ export function PointCloudFloorPlan({
           "relative w-full overflow-hidden bg-transparent",
           fillColumn
             ? "min-h-0 flex-1 rounded-none border-0"
-            : "aspect-[3/2] rounded-xl border border-white/[0.06]",
+            : "aspect-[3/2] rounded-xl border border-border/80",
         )}
       >
         <canvas
@@ -459,9 +459,9 @@ export function PointCloudFloorPlan({
         />
       </div>
 
-      <div className="rounded-xl border border-white/[0.08] bg-black/35 px-3 py-2.5">
-        <p className="text-sm font-medium text-white/75">Point cloud view</p>
-        <p className="mt-0.5 text-[11px] text-white/40">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
+      <div className="rounded-xl border border-border/80 bg-muted/50 px-3 py-2.5">
+        <p className="text-sm font-medium text-foreground">Point cloud view</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">{JOHN_ABBOTT_LIBRARY_SUBTITLE}</p>
       </div>
     </div>
   );

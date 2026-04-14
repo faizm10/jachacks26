@@ -84,25 +84,25 @@ export function InteractiveFloorPlanPanel({ fallback }: { fallback: FloorPlanDat
         subtitle={fileHint ? `${subtitle} · ${fileHint}` : subtitle}
         action={
           loading ? (
-            <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-100/90">
+            <span className="rounded-full border border-cyan-600/30 bg-cyan-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-900">
               Analyzing
             </span>
           ) : error ? (
-            <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-100/90">
+            <span className="rounded-full border border-amber-600/30 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-950">
               Fallback
             </span>
           ) : data.source === "video" ? (
             <span
               className={
                 data.meta?.mapping === "corridor_img5530"
-                  ? "rounded-full border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-sky-100/90"
-                  : "rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90"
+                  ? "rounded-full border border-sky-600/35 bg-sky-500/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-sky-900"
+                  : "rounded-full border border-emerald-600/30 bg-emerald-600/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-900"
               }
             >
               {data.meta?.mapping === "corridor_img5530" ? "Corridor map" : "Live map"}
             </span>
           ) : (
-            <span className="rounded-full border border-white/12 bg-white/[0.05] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/45">
+            <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Demo
             </span>
           )
@@ -114,23 +114,23 @@ export function InteractiveFloorPlanPanel({ fallback }: { fallback: FloorPlanDat
           {loading ? (
             <motion.div
               key="sk"
-              className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 rounded-xl bg-black/50 backdrop-blur-sm"
+              className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 rounded-xl bg-stone-900/25 backdrop-blur-sm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
               <motion.div
-                className="h-9 w-9 rounded-full border-2 border-white/15 border-t-cyan-300/80"
+                className="h-9 w-9 rounded-full border-2 border-border border-t-cyan-600"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 0.85, repeat: Infinity, ease: "linear" }}
               />
-              <p className="text-xs font-medium tracking-wide text-white/55">{PHASES[phaseIdx]}</p>
+              <p className="text-xs font-medium tracking-wide text-muted-foreground">{PHASES[phaseIdx]}</p>
             </motion.div>
           ) : null}
         </AnimatePresence>
 
         {error ? (
-          <p className="rounded-lg border border-amber-400/20 bg-amber-950/40 px-3 py-2 text-[11px] leading-snug text-amber-100/85">
+          <p className="rounded-lg border border-amber-600/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-950">
             {error}
           </p>
         ) : null}
@@ -149,8 +149,8 @@ export function InteractiveFloorPlanPanel({ fallback }: { fallback: FloorPlanDat
                     className={cn(
                       "rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider backdrop-blur-md transition-colors",
                       showHeatOn3d
-                        ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-100/90 hover:bg-emerald-500/25"
-                        : "border-white/15 bg-black/60 text-white/55 hover:bg-white/15 hover:text-white/80",
+                        ? "border-emerald-600/35 bg-emerald-600/12 text-emerald-900 hover:bg-emerald-600/20"
+                        : "border-border bg-popover/95 text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
                     {showHeatOn3d ? "3D heat on" : "3D heat off"}
@@ -163,9 +163,9 @@ export function InteractiveFloorPlanPanel({ fallback }: { fallback: FloorPlanDat
                     void analyzeUrl(activeVideo.url, seq, activeVideo.path);
                   }}
                   className={cn(
-                    "rounded-full border border-white/15 bg-black/60 px-3 py-1.5",
-                    "text-[10px] font-semibold uppercase tracking-wider text-white/75 backdrop-blur-md",
-                    "transition-colors hover:bg-white/15 hover:text-white",
+                    "rounded-full border border-border bg-popover/95 px-3 py-1.5",
+                    "text-[10px] font-semibold uppercase tracking-wider text-foreground backdrop-blur-md",
+                    "transition-colors hover:bg-muted",
                   )}
                 >
                   Re-run

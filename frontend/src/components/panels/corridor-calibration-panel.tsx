@@ -153,7 +153,7 @@ function ClickablePanel({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
         {showPlayToggle && videoRef ? (
           <button
             type="button"
@@ -161,7 +161,7 @@ function ClickablePanel({
               e.stopPropagation();
               togglePlay();
             }}
-            className="rounded-md border border-white/15 bg-black/50 px-2 py-1 text-[10px] font-medium text-white/70 backdrop-blur-sm hover:bg-white/10"
+            className="rounded-md border border-border bg-muted px-2 py-1 text-[10px] font-medium text-foreground backdrop-blur-sm hover:bg-muted/80"
           >
             Preview play/pause
           </button>
@@ -170,13 +170,13 @@ function ClickablePanel({
       <div
         ref={containerRef}
         onClick={handleClick}
-        className={`relative aspect-video w-full overflow-hidden rounded-xl border border-white/[0.1] bg-black ${
+        className={`relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-stone-950 ${
           points.length < 4 && ready ? "cursor-crosshair" : "cursor-default"
         }`}
       >
         {!ready ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-            <p className="text-xs text-white/45">
+          <div className="absolute inset-0 flex items-center justify-center bg-stone-950/70">
+            <p className="text-xs text-muted-foreground">
               {isVideo ? "Loading video dimensions…" : "Loading…"}
             </p>
           </div>
@@ -230,7 +230,7 @@ function ClickablePanel({
         )}
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
-          <p className="text-[10px] text-white/60">{hint}</p>
+          <p className="text-[10px] text-muted-foreground">{hint}</p>
         </div>
       </div>
     </div>
@@ -304,7 +304,7 @@ function FloorThreeClickPanel({
     >
       {/* Mode badge */}
       {placing && (
-        <div className="pointer-events-none absolute left-2 top-2 rounded-full border border-sky-400/30 bg-sky-400/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-sky-200/90">
+        <div className="pointer-events-none absolute left-2 top-2 rounded-full border border-sky-500/35 bg-sky-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-sky-900">
           Place mode · orbit paused
         </div>
       )}
@@ -334,14 +334,14 @@ function FloorThreeClickPanel({
 
       {/* Hint gradient bar at bottom */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
-        <p className="text-[10px] text-white/60">{hint}</p>
+        <p className="text-[10px] text-muted-foreground">{hint}</p>
       </div>
     </div>
   );
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       <JohnAbbottLibraryFloorThree canvasChildren={canvasOverlay} />
     </div>
   );
@@ -490,36 +490,36 @@ function CalibrationModal({
       exit={{ opacity: 0 }}
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+      <div className="absolute inset-0 bg-stone-900/35 backdrop-blur-md" />
       <motion.div
-        className="relative z-10 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-[rgba(6,8,14,0.97)] shadow-2xl"
+        className="relative z-10 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-popover/95 shadow-[0_24px_60px_rgba(62,48,40,0.14)]"
         initial={{ scale: 0.96, y: 12, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 380, damping: 32 }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] px-5 py-4">
+        <div className="flex items-center justify-between gap-4 border-b border-border/80 px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold text-white">
+            <h2 className="text-sm font-semibold text-foreground">
               {isEditMode ? "Edit corridor calibration" : "Corridor calibration"}
             </h2>
-            <p className="mt-0.5 text-xs text-white/45">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               Maps a camera clip to the{" "}
-              <strong className="text-white/70">3D floor plan</strong> for homography (analysis
+              <strong className="text-foreground">3D floor plan</strong> for homography (analysis
               overlay). Mark 4 matching corners on the{" "}
-              <strong className="text-white/70">full camera frame</strong> (left), then click the
+              <strong className="text-foreground">full camera frame</strong> (left), then click the
               same spots on the{" "}
-              <strong className="text-white/70">3D floor view</strong> (right — orbit is paused
+              <strong className="text-foreground">3D floor view</strong> (right — orbit is paused
               while placing). The backend uses{" "}
-              <strong className="text-white/70">{FLOOR_W}×{FLOOR_H}</strong> intrinsic coordinates.
+              <strong className="text-foreground">{FLOOR_W}×{FLOOR_H}</strong> intrinsic coordinates.
               {isEditMode ? " Use Clear to re-place corners, then click again in order A→D." : null}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/[0.1]"
+            className="shrink-0 rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/80"
           >
             Close
           </button>
@@ -528,23 +528,23 @@ function CalibrationModal({
         <div className="flex-1 overflow-y-auto p-5">
           {/* Step 0: Pick camera */}
           <div className="mb-5">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Step 1 · Select camera
             </p>
             {isEditMode && initialCalibration ? (
               <div className="space-y-2">
                 {selectedCam ? (
-                  <p className="text-xs text-white/55">
+                  <p className="text-xs text-muted-foreground">
                     Editing clip{" "}
-                    <span className="font-medium text-white/85">
+                    <span className="font-medium text-foreground">
                       {selectedCam.path.split("/").pop() ?? selectedCam.path}
                     </span>{" "}
-                    <span className="text-white/35">({initialCalibration.camera_id})</span>
+                    <span className="text-muted-foreground">({initialCalibration.camera_id})</span>
                   </p>
                 ) : (
-                  <p className="rounded-lg border border-amber-400/25 bg-amber-950/25 px-3 py-2 text-xs text-amber-100/85">
+                  <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-950">
                     No video in the bucket matches camera ID{" "}
-                    <code className="rounded bg-black/40 px-1 py-0.5">{initialCalibration.camera_id}</code>.
+                    <code className="rounded bg-muted px-1 py-0.5 text-foreground">{initialCalibration.camera_id}</code>.
                     Upload that file (same name) to preview the clip while you adjust points, or remove this
                     calibration and create a new one.
                   </p>
@@ -565,8 +565,8 @@ function CalibrationModal({
                       }}
                       className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                         selectedCam?.path === obj.path
-                          ? "border-sky-400/40 bg-sky-400/15 text-sky-200"
-                          : "border-white/12 bg-white/[0.04] text-white/60 hover:border-white/20 hover:text-white/80"
+                          ? "border-sky-500/40 bg-sky-500/15 text-sky-900"
+                          : "border-border bg-muted/60 text-muted-foreground hover:border-primary/30 hover:text-foreground"
                       }`}
                     >
                       {name}
@@ -574,7 +574,7 @@ function CalibrationModal({
                   );
                 })}
                 {videoObjects.length === 0 && (
-                  <p className="text-xs text-white/35">No videos in cam bucket yet.</p>
+                  <p className="text-xs text-muted-foreground">No videos in cam bucket yet.</p>
                 )}
               </div>
             )}
@@ -584,14 +584,14 @@ function CalibrationModal({
             <>
               {/* Step 1 + 2: Click points */}
               <div className="mb-4">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Step 2 · Mark corridor corners (4 points each)
                 </p>
                 <div className="mb-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={clearCameraCorners}
-                    className="rounded-full border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[10px] font-medium text-white/55 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white/75"
+                    className="rounded-full border border-border bg-card px-3 py-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/25 hover:bg-muted hover:text-foreground/90"
                   >
                     Clear camera corners
                   </button>
@@ -599,7 +599,7 @@ function CalibrationModal({
                     type="button"
                     onClick={clearFloorCorners}
                     disabled={cameraPts.length < 4}
-                    className="rounded-full border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[10px] font-medium text-white/55 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white/75 disabled:cursor-not-allowed disabled:opacity-35"
+                    className="rounded-full border border-border bg-card px-3 py-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/25 hover:bg-muted hover:text-foreground/90 disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     Clear floor corners
                   </button>
@@ -646,7 +646,7 @@ function CalibrationModal({
               {/* Step 3: Label + save */}
               <div className="flex flex-wrap items-end gap-3">
                 <div className="flex-1">
-                  <label className="mb-1.5 block text-[11px] font-medium text-white/45">
+                  <label className="mb-1.5 block text-[11px] font-medium text-muted-foreground">
                     Corridor label (optional)
                   </label>
                   <input
@@ -654,13 +654,13 @@ function CalibrationModal({
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
                     placeholder={`e.g. "North corridor"`}
-                    className="w-full rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-sm text-white/80 placeholder-white/25 outline-none focus:border-white/25"
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={reset}
-                  className="rounded-full border border-white/12 bg-white/[0.04] px-4 py-2 text-xs font-medium text-white/55 hover:bg-white/[0.08]"
+                  className="rounded-full border border-border bg-card px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted"
                 >
                   Reset points
                 </button>
@@ -673,7 +673,7 @@ function CalibrationModal({
                     cameraPts.length < 4 ||
                     floorPts.length < 4
                   }
-                  className="rounded-full border border-sky-400/30 bg-sky-500/20 px-5 py-2 text-xs font-semibold text-sky-200 transition-colors hover:bg-sky-500/30 disabled:opacity-40"
+                  className="rounded-full border border-sky-600/35 bg-sky-600/15 px-5 py-2 text-xs font-semibold text-sky-900 transition-colors hover:bg-sky-600/25 disabled:opacity-40"
                 >
                   {saving ? "Saving…" : isEditMode ? "Save changes" : "Save calibration"}
                 </button>
@@ -688,7 +688,7 @@ function CalibrationModal({
           )}
 
           {/* Progress from real counts; old `i <= step` lit “4/4” while still placing video corners. */}
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-white/[0.06] pt-4">
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-border/80 pt-4">
             {(
               [
                 {
@@ -720,15 +720,15 @@ function CalibrationModal({
               ] as const
             ).map((row) => {
               const tone = row.done
-                ? "bg-emerald-400/12 text-emerald-100/90 ring-1 ring-emerald-400/25"
+                ? "bg-emerald-600/12 text-emerald-900 ring-1 ring-emerald-600/30"
                 : row.current
-                  ? "bg-sky-400/15 text-sky-100/90 ring-1 ring-sky-400/35"
-                  : "bg-white/[0.04] text-white/30";
+                  ? "bg-sky-500/15 text-sky-900 ring-1 ring-sky-500/35"
+                  : "bg-muted/50 text-muted-foreground/80";
               const dot = row.done
                 ? "bg-emerald-400"
                 : row.current
                   ? "bg-sky-400"
-                  : "bg-white/20";
+                  : "bg-muted-foreground/25";
               return (
                 <div
                   key={row.key}
@@ -800,7 +800,7 @@ export function CorridorCalibrationPanel() {
               setEditingCalibration(null);
               setShowModal(true);
             }}
-            className="rounded-full border border-sky-400/30 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold text-sky-200/90 transition-colors hover:bg-sky-400/20"
+            className="rounded-full border border-sky-600/35 bg-sky-600/12 px-3 py-1 text-[11px] font-semibold text-sky-900 transition-colors hover:bg-sky-600/20"
           >
             + New calibration
           </button>
@@ -809,17 +809,17 @@ export function CorridorCalibrationPanel() {
 
       <div className="mt-3 space-y-2">
         {listError ? (
-          <p className="rounded-xl border border-amber-400/25 bg-amber-950/30 px-3 py-2 text-xs text-amber-100/90">
+          <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-950">
             {listError}
           </p>
         ) : null}
         {loadingCals ? (
-          <p className="text-xs text-white/35">Loading…</p>
+          <p className="text-xs text-muted-foreground">Loading…</p>
         ) : calibrations.length === 0 ? (
-          <div className="rounded-xl border border-white/[0.06] bg-black/20 px-4 py-5 text-center">
-            <p className="text-sm font-medium text-white/50">No calibrations yet</p>
-            <p className="mt-1 text-xs text-white/30">
-              Click <span className="font-medium text-white/45">+ New calibration</span> to map a
+          <div className="rounded-xl border border-border/80 bg-muted/40 px-4 py-5 text-center">
+            <p className="text-sm font-medium text-muted-foreground">No calibrations yet</p>
+            <p className="mt-1 text-xs text-muted-foreground/80">
+              Click <span className="font-medium text-muted-foreground">+ New calibration</span> to map a
               camera to its corridor on the floor plan.
             </p>
           </div>
@@ -827,13 +827,13 @@ export function CorridorCalibrationPanel() {
           calibrations.map((cal) => (
             <div
               key={cal.camera_id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3"
+              className="flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-card/80 px-4 py-3"
             >
               <div>
-                <p className="text-sm font-medium text-white/80">
+                <p className="text-sm font-medium text-foreground">
                   {cal.label || cal.camera_id}
                 </p>
-                <p className="mt-0.5 text-xs text-white/40">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   ID: {cal.camera_id} · {cal.camera_pts.length} point pairs ·{" "}
                   {cal.floor_w}×{cal.floor_h} floor plan
                 </p>
@@ -845,14 +845,14 @@ export function CorridorCalibrationPanel() {
                     setEditingCalibration(cal);
                     setShowModal(true);
                   }}
-                  className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-[10px] font-semibold text-sky-200/90 transition-colors hover:bg-sky-400/20"
+                  className="rounded-full border border-sky-600/35 bg-sky-600/12 px-2.5 py-1 text-[10px] font-semibold text-sky-900 transition-colors hover:bg-sky-600/20"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleDelete(cal.camera_id)}
-                  className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-white/40 hover:border-red-400/25 hover:text-red-300/70"
+                  className="rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-medium text-muted-foreground hover:border-red-400/40 hover:text-red-700"
                 >
                   Remove
                 </button>

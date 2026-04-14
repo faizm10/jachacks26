@@ -7,9 +7,9 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 const severityRing: Record<string, string> = {
-  calm: "border-cyan-400/25 bg-cyan-400/5",
-  info: "border-white/15 bg-white/[0.04]",
-  attention: "border-amber-400/30 bg-amber-400/5",
+  calm: "border-cyan-600/30 bg-cyan-500/10",
+  info: "border-border bg-muted/50",
+  attention: "border-amber-600/35 bg-amber-500/8",
 };
 
 export function InsightsPanel({
@@ -45,8 +45,8 @@ export function InsightsPanel({
             className={cn(
               "rounded-xl border px-4 py-3",
               severityRing[insight.severity] ?? severityRing.info,
-              clickable && "cursor-pointer transition-colors hover:border-white/25 hover:bg-white/[0.04]",
-              isSelected && "border-white/40 bg-white/[0.06] ring-1 ring-white/20",
+              clickable && "cursor-pointer transition-colors hover:border-primary/30 hover:bg-muted/60",
+              isSelected && "border-primary/40 bg-muted/70 ring-1 ring-primary/25",
             )}
             role={clickable ? "button" : undefined}
             tabIndex={clickable ? 0 : undefined}
@@ -63,10 +63,10 @@ export function InsightsPanel({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium tracking-tight text-white">{insight.title}</p>
-                <p className="mt-1 text-xs leading-relaxed text-white/50">{insight.detail}</p>
+                <p className="text-sm font-medium tracking-tight text-foreground">{insight.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{insight.detail}</p>
               </div>
-              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-white/35">
+              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {insight.timestamp}
               </span>
             </div>
@@ -88,10 +88,10 @@ function Stat({
   hint: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">{label}</p>
-      <p className="mt-1 truncate text-sm font-medium text-white">{value}</p>
-      <p className="text-[10px] text-white/35">{hint}</p>
+    <div className="rounded-xl border border-border/80 bg-muted/40 px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium text-foreground">{value}</p>
+      <p className="text-[10px] text-muted-foreground">{hint}</p>
     </div>
   );
 }

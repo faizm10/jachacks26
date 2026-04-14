@@ -18,7 +18,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           aria-hidden
           style={{
             background:
-              "radial-gradient(ellipse 70% 45% at 50% 0%, rgba(120, 140, 255, 0.07), transparent 55%)",
+              "radial-gradient(ellipse 70% 45% at 50% 0%, rgba(79, 70, 229, 0.09), transparent 55%), radial-gradient(ellipse 50% 35% at 80% 0%, rgba(59, 130, 246, 0.04), transparent 50%)",
           }}
         />
         <div className="relative">

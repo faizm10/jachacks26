@@ -9,27 +9,27 @@ export function FloorPlanPanel({ data }: { data: FloorPlanData }) {
   return (
     <GlassPanel className="p-5">
       <SectionHeader title="Floor plan" subtitle={data.roomName} />
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-white/[0.06] bg-gradient-to-b from-white/[0.04] to-black/40">
-        <div className="absolute inset-4 rounded-lg border border-dashed border-white/10" />
+      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-border/80 bg-gradient-to-b from-card/90 to-muted/50">
+        <div className="absolute inset-4 rounded-lg border border-dashed border-border/90" />
         {data.zones.map((z, i) => (
           <motion.div
             key={z.id}
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.06 * i, type: "spring", stiffness: 320, damping: 24 }}
-            className="absolute rounded-lg border border-white/15 bg-white/[0.06] backdrop-blur-sm"
+            className="absolute rounded-lg border border-border/90 bg-card/80 backdrop-blur-sm"
             style={{
               left: `${z.x}%`,
               top: `${z.y}%`,
               width: `${z.w}%`,
               height: `${z.h}%`,
-              boxShadow: `inset 0 0 0 1px rgba(255,255,255,${0.04 + z.occupancy * 0.08})`,
+              boxShadow: `inset 0 0 0 1px rgba(62,48,40,${0.06 + z.occupancy * 0.12})`,
             }}
           >
-            <span className="absolute left-2 top-2 text-[10px] font-semibold uppercase tracking-wider text-white/50">
+            <span className="absolute left-2 top-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {z.label}
             </span>
-            <div className="absolute bottom-2 right-2 rounded-md bg-black/40 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white/60">
+            <div className="absolute bottom-2 right-2 rounded-md bg-stone-900/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-stone-100">
               {Math.round(z.occupancy * 100)}% use
             </div>
           </motion.div>

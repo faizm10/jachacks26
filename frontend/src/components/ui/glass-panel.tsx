@@ -9,7 +9,7 @@ export function GlassPanel({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-white/[0.08] bg-white/[0.04] shadow-[0_12px_40px_rgba(0,0,0,0.35)]",
+        "rounded-2xl border border-border/80 bg-card/75 text-foreground shadow-[0_12px_40px_rgba(62,48,40,0.08)]",
         "backdrop-blur-2xl backdrop-saturate-150",
         className,
       )}

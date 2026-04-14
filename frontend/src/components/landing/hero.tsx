@@ -30,19 +30,19 @@ export function Hero() {
     >
       <motion.p
         variants={item}
-        className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40"
+        className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
       >
         Spatial awareness
       </motion.p>
       <motion.h1
         variants={item}
-        className="mt-5 text-balance text-4xl font-semibold tracking-tight text-white sm:text-5xl sm:leading-[1.08]"
+        className="mt-5 text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl sm:leading-[1.08]"
       >
         Foco
       </motion.h1>
       <motion.p
         variants={item}
-        className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-white/55 sm:text-lg"
+        className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg"
       >
         Understand how a room is being used in real time — movement, focus, and context
         fused into a single calm surface.

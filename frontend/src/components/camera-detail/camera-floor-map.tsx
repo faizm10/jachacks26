@@ -167,7 +167,7 @@ export function CameraFloorMap({
         }
       />
       <div
-        className="relative mt-2 w-full overflow-hidden rounded-xl border border-white/[0.06] bg-black/30"
+        className="relative mt-2 w-full overflow-hidden rounded-xl border border-border/80 bg-muted/50"
         style={{ aspectRatio: "3 / 2" }}
       >
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />

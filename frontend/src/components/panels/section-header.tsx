@@ -20,9 +20,9 @@ export function SectionHeader({
       )}
     >
       <div>
-        <h2 className="text-sm font-medium tracking-tight text-white">{title}</h2>
+        <h2 className="text-sm font-medium tracking-tight text-foreground">{title}</h2>
         {subtitle ? (
-          <p className="text-xs text-white/45 font-medium tracking-wide">{subtitle}</p>
+          <p className="text-xs font-medium tracking-wide text-muted-foreground">{subtitle}</p>
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

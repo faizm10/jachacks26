@@ -26,10 +26,10 @@ export function FloorOverviewPanel({
   const [visual, setVisual] = useState<FloorHeroVisual>("mesh");
 
   return (
-    <div className="flex h-full min-h-0 w-full min-h-[420px] flex-col lg:min-h-[min(88vh,920px)]">
+    <div className="flex h-full min-h-0 w-full min-h-[420px] flex-col text-foreground lg:min-h-[min(88vh,920px)]">
       <div className="mb-1.5 flex shrink-0 flex-col items-start gap-1.5">
         <div
-          className="inline-flex rounded-md border border-white/[0.05] bg-white/[0.02] p-px"
+          className="inline-flex rounded-md border border-border/80 bg-muted/40 p-px"
           role="tablist"
           aria-label="Library visualization"
         >
@@ -41,8 +41,8 @@ export function FloorOverviewPanel({
             className={cn(
               "rounded-[5px] px-2 py-0.5 text-[10px] font-medium transition-colors",
               visual === "mesh"
-                ? "bg-white/[0.08] text-white/70"
-                : "text-white/30 hover:bg-white/[0.04] hover:text-white/50",
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
             )}
           >
             Solid 3D
@@ -55,8 +55,8 @@ export function FloorOverviewPanel({
             className={cn(
               "rounded-[5px] px-2 py-0.5 text-[10px] font-medium transition-colors",
               visual === "pointCloud"
-                ? "bg-white/[0.08] text-white/70"
-                : "text-white/30 hover:bg-white/[0.04] hover:text-white/50",
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
             )}
           >
             Point scan
@@ -65,23 +65,23 @@ export function FloorOverviewPanel({
 
         <div className="flex items-center gap-2.5">
           <div className="leading-none">
-            <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/35">
+            <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
               </span>
               Campus model
             </p>
-            <p className="mt-0.5 text-[11px] font-semibold tracking-tight text-white/80">
+            <p className="mt-0.5 text-[11px] font-semibold tracking-tight text-foreground">
               John Abbott College
-              <span className="ml-1 font-normal text-white/40">&middot; Herzberg Library</span>
+              <span className="ml-1 font-normal text-muted-foreground">&middot; Herzberg Library</span>
             </p>
           </div>
           <a
             href={JOHN_ABBOTT_COLLEGE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[10px] font-medium text-sky-300/70 underline decoration-sky-400/30 underline-offset-2 transition-colors hover:text-sky-200"
+            className="text-[10px] font-medium text-sky-700 underline decoration-sky-500/40 underline-offset-2 transition-colors hover:text-sky-900"
           >
             &#x2197;
           </a>
